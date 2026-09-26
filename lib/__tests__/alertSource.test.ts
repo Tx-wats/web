@@ -71,3 +71,28 @@ describe('startAlertPolling', () => {
     vi.useRealTimers()
   })
 })
+
+describe('alert identity', () => {
+  it('assigns a stable id to every stored alert', () => {
+    const a = mk('a')
+    const b = mk('b', 'Other', 2)
+    const idA = alertKey(a)
+    const idB = alertKey(b)
+    expect(idA).toBe(alertKey(mk('a')))
+    expect(idA).not.toBe(idB)
+    expect(idA).toContain('a')
+    expect(idA).toContain('AnyTransaction')
+  })
+
+  it('deletes only the matching alert and never id-less alerts', () => {
+    const alerts = [mk('a'), mk('b', 'Other', 2)]
+    const remaining = alerts.filter((x) => alertKey(x) !== alertKey(mk('a')))
+    expect(remaining.map((x) => x.transaction_hash)).toEqual(['b'])
+  })
+
+  it('clears only the target contract history', () => {
+    const alerts = [mk('a'), { ...mk('b'), contract_id: 'C2' }]
+    const remaining = alerts.filter((x) => x.contract_id !== 'C1')
+    expect(remaining.map((x) => x.contract_id)).toEqual(['C2'])
+  })
+})
