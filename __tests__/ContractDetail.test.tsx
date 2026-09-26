@@ -57,4 +57,24 @@ describe('formatRuleSummary', () => {
 
     expect(rules.map((rule) => rule.function_names)).toEqual(snapshot)
   })
+
+  it('rejects editing a rule to match another rule label', () => {
+    const rules: AlertRule[] = [
+      { type: 'LargeTransfer', threshold_xlm: 1000 },
+      { type: 'FunctionCalled', function_name: 'transfer' },
+    ]
+    const editingIndex = 1
+
+    // Duplicate check must run against all rules except the one being edited.
+    const isDuplicateLabel = (label: string, index: number | null) =>
+      rules.some(
+        (rule, i) => i !== index && formatRuleSummary(rule) === label
+      )
+
+    const editedLabel = formatRuleSummary(rules[0])
+    expect(isDuplicateLabel(editedLabel, editingIndex)).toBe(true)
+
+    // The rule being edited must not collide with itself.
+    expect(isDuplicateLabel(formatRuleSummary(rules[1]), editingIndex)).toBe(false)
+  })
 })

@@ -49,8 +49,9 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
     setWarning(null)
   }
 
-  function isDuplicateLabel(newRule: AlertRule): boolean {
-    return rules.some((rule) => {
+  function isDuplicateLabel(newRule: AlertRule, ignoreIndex: number | null = null): boolean {
+    return rules.some((rule, index) => {
+      if (ignoreIndex !== null && index === ignoreIndex) return false
       if (newRule.type !== rule.type) return false
       if (newRule.type === 'LargeTransfer') return newRule.threshold_xlm === rule.threshold_xlm
       if (newRule.type === 'FunctionCalled') return newRule.function_name === rule.function_name
@@ -98,6 +99,10 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
     }
     const newRule = { ...draft }
     if (editingIndex !== null) {
+      if (isDuplicateLabel(newRule, editingIndex)) {
+        setWarning('This rule already exists')
+        return
+      }
       const updated = [...rules]
       updated[editingIndex] = newRule
       onChange(updated)
@@ -220,7 +225,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
             <button
               type="button"
               onClick={cancelEdit}
-              className="px-3 py-1.5 rounded-lg border border-zinc-700 text-sm font-medium text-zinc-300 hover:bg-zinc-800 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-sm font-medium text-zinc-100 transition-colors"
             >
               Cancel
             </button>
@@ -228,7 +233,9 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
         </div>
       </div>
 
-      {rules.length > 0 && (
+      {rules.length === 0 ? (
+        <p className="text-sm text-zinc-500 text-center py-6">No alert rules configured yet.</p>
+      ) : (
         <ul className="space-y-2">
           {rules.map((rule, index) => (
             <li
