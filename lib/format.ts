@@ -45,6 +45,21 @@ export function formatDateTime(timestamp: number): string {
 }
 
 /**
+ * Returns the formatted last-modified time for a contract, or null when the
+ * contract has not been modified since it was created (updated_at === created_at).
+ * Callers can use the null result to hide the "Last modified" row.
+ */
+export function formatLastModified(
+  updatedAt: number,
+  createdAt: number
+): string | null {
+  if (updatedAt === createdAt) {
+    return null
+  }
+  return formatDateTime(updatedAt)
+}
+
+/**
  * Formats an alert rule as a human-readable summary string.
  *
  * The LargeTransfer operator matches tx-watch-core, which fires when a

@@ -217,7 +217,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
             onClick={openEditMetadata}
             className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
           >
-            Edit Details
+            Edit Metadata
           </button>
           <button
             onClick={openEditRules}
@@ -225,254 +225,157 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
           >
             Edit Rules
           </button>
-          {process.env.NODE_ENV !== 'production' && (
-            <button
-              onClick={() => {
-                seedMockAlerts(params.id, contract.network)
-                setAlerts(getAlerts(params.id))
-              }}
-              className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
-            >
-              Seed mock alerts
-            </button>
-          )}
           <button
             onClick={() => setShowDelete(true)}
-            className="px-3 py-1.5 rounded-lg border border-red-800 hover:border-red-600 text-sm text-red-400 hover:text-red-300 transition-colors"
+            className="px-3 py-1.5 rounded-lg border border-red-900/50 hover:border-red-700 text-sm text-red-400 hover:text-red-300 transition-colors"
           >
             Delete
           </button>
         </div>
       </div>
 
-      {/* Metadata */}
-      <div className="grid sm:grid-cols-3 gap-4">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs text-zinc-500">Webhook URL</p>
-            <CopyButton text={contract.webhook_url} />
+      {/* Registered card */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-zinc-300">Registered</h2>
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div>
+            <dt className="text-zinc-500">Registered</dt>
+            <dd className="text-zinc-200">{formatDate(contract.created_at)}</dd>
           </div>
-          <a
-            href={contract.webhook_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors break-all"
-          >
-            {contract.webhook_url}
-          </a>
-        </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-xs text-zinc-500 mb-1">Registered</p>
-          <p className="text-sm text-zinc-300">{formatDate(contract.created_at)}</p>
-          <p className="text-xs text-zinc-500 mt-1">{new Date(contract.created_at).toLocaleTimeString()}</p>
-        </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-xs text-zinc-500 mb-1">{alerts.length === 0 ? 'Total Alerts' : 'Last Alert'}</p>
-          {sync.enabled && <NotificationToggle />}
-          {sync.enabled && (
-            <p className="text-xs text-zinc-500 mb-1" data-testid="sync-status">
-              <span className={sync.live ? 'text-green-400' : 'text-zinc-500'}>
-                {sync.live ? 'Live' : 'Offline'}
-              </span>
-              {sync.lastSync ? ` · synced ${new Date(sync.lastSync).toLocaleTimeString()}` : ''}
-            </p>
+          {contract.updated_at && contract.updated_at !== contract.created_at && (
+            <div>
+              <dt className="text-zinc-500">Last modified</dt>
+              <dd className="text-zinc-200">{formatDate(contract.updated_at)}</dd>
+            </div>
           )}
-          {alerts.length === 0 ? (
-            <p className="text-sm text-zinc-300">No alerts yet</p>
-          ) : (
-            <>
-              <p className="text-sm text-zinc-300">{formatDate(alerts[0].timestamp)}</p>
-              <p className="text-xs text-zinc-500 mt-1">{new Date(alerts[0].timestamp).toLocaleTimeString()}</p>
-            </>
-          )}
-        </div>
+        </dl>
       </div>
 
-      {/* Active Rules */}
-      <div>
-        <h2 className="text-lg font-semibold text-zinc-100 mb-3">Active Rules</h2>
+      {/* Rules */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-zinc-300">Alert Rules</h2>
+          <span className="text-xs text-zinc-500">{contract.rules.length} rule{contract.rules.length === 1 ? '' : 's'}</span>
+        </div>
         {contract.rules.length === 0 ? (
           <p className="text-sm text-zinc-500">No rules configured.</p>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <ul className="space-y-2">
             {contract.rules.map((rule, i) => (
-              <div key={i} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2">
-                <AlertRuleBadge type={rule.type} />
-                {formatRuleSummary(rule) && (
-                  <span className="text-xs font-mono text-zinc-400">{formatRuleSummary(rule)}</span>
-                )}
-              </div>
+              <li key={i} className="flex items-center gap-2">
+                <AlertRuleBadge rule={rule} />
+                <span className="text-sm text-zinc-400">{formatRuleSummary(rule)}</span>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
 
-      {/* Alert History */}
-      <div>
-        <h2 className="text-lg font-semibold text-zinc-100 mb-3">Alert History</h2>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <WebhookLog alerts={alerts} network={contract.network} />
+      {/* Webhook */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-zinc-300">Webhook</h2>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-mono text-zinc-400 break-all">{contract.webhook_url}</span>
+          <CopyButton text={contract.webhook_url} />
         </div>
+        <NotificationToggle contractId={contract.contract_id} />
       </div>
 
-      {/* Edit Metadata Modal */}
-      {showEditMetadata && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-lg w-full space-y-4">
-            <h3 className="text-lg font-semibold text-zinc-100">Edit Contract Details</h3>
-            
-            <div className="space-y-4">
-              {/* Label field */}
-              <div>
-                <label htmlFor="edit-label" className="block text-sm font-medium text-zinc-300 mb-2">
-                  Label
-                </label>
-                <input
-                  id="edit-label"
-                  type="text"
-                  value={editedLabel}
-                  onChange={(e) => setEditedLabel(e.target.value)}
-                  placeholder="My Contract"
-                  maxLength={100}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-                <p className="text-xs text-zinc-500 mt-1">
-                  {editedLabel.length}/100 characters
-                </p>
-              </div>
+      {/* Webhook log */}
+      <WebhookLog contractId={contract.contract_id} />
 
-              {/* Webhook URL field */}
-              <div>
-                <label htmlFor="edit-webhook" className="block text-sm font-medium text-zinc-300 mb-2">
-                  Webhook URL
-                </label>
-                <input
-                  id="edit-webhook"
-                  type="url"
-                  value={editedWebhookUrl}
-                  onChange={(e) => setEditedWebhookUrl(e.target.value)}
-                  placeholder="https://example.com/webhook"
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-                <p className="text-xs text-zinc-500 mt-1">
-                  Must be a valid HTTP or HTTPS URL
-                </p>
-              </div>
-            </div>
-
-            {metadataError && (
-              <div className="bg-red-900/20 border border-red-800 rounded-lg p-3">
-                <p className="text-xs text-red-400">{metadataError}</p>
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={saveMetadata}
-                className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
-              >
-                Save Changes
-              </button>
-              <button
-                onClick={handleCancelMetadataEdit}
-                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Modal */}
-      {showDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-sm w-full space-y-4">
-            <h3 className="text-lg font-semibold text-zinc-100">Delete Contract?</h3>
-            <div className="space-y-2 text-sm text-zinc-400">
-              <p>
-                This will permanently remove <span className="text-zinc-200 font-medium">{contract.label}</span> and cannot be undone.
-              </p>
-              <p className="text-xs text-zinc-500">
-                Deleted data:
-              </p>
-              <ul className="text-xs text-zinc-500 list-disc list-inside space-y-1">
-                <li>Contract configuration and alert rules</li>
-                <li>All {alerts.length} alert {alerts.length === 1 ? 'record' : 'records'}</li>
-              </ul>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handleDelete}
-                className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-medium text-white transition-colors"
-              >
-                Delete
-              </button>
-              <button
-                onClick={() => setShowDelete(false)}
-                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Rules Modal */}
+      {/* Modals */}
       {showEditRules && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-zinc-100">Edit Alert Rules</h3>
-            <RuleBuilder
-              rules={editedRules}
-              onChange={setEditedRules}
-              onRulesChanged={(rules, action) =>
-                trackEvent(action === 'remove' ? 'rule_removed' : 'rule_added', {
-                  contractId: params.id,
-                  ruleCount: rules.length,
-                })
-              }
-            />
-            {rulesError && <p className="text-xs text-red-400">{rulesError}</p>}
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={saveRules}
-                className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
-              >
-                Save Rules
-              </button>
-              <button
-                onClick={handleCancelEdit}
-                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+        <RuleBuilder
+          rules={editedRules}
+          onChange={setEditedRules}
+          onSave={saveRules}
+          onCancel={handleCancelEdit}
+          error={rulesError}
+        />
       )}
 
-      {/* Unsaved Changes Warning Modal */}
       {showUnsavedWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-sm w-full space-y-4">
-            <h3 className="text-lg font-semibold text-zinc-100">Discard Changes?</h3>
-            <p className="text-sm text-zinc-400">
-              You have unsaved changes to your alert rules. Are you sure you want to discard them?
-            </p>
-            <div className="flex gap-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900 p-5 space-y-4">
+            <h3 className="text-base font-semibold text-zinc-100">Discard unsaved changes?</h3>
+            <p className="text-sm text-zinc-400">Your rule edits will be lost.</p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowUnsavedWarning(false)}
+                className="px-3 py-1.5 rounded-lg border border-zinc-700 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+              >
+                Keep editing
+              </button>
               <button
                 onClick={confirmDiscard}
-                className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-medium text-white transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-medium text-white transition-colors"
               >
                 Discard
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditMetadata && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-5 space-y-4">
+            <h3 className="text-base font-semibold text-zinc-100">Edit Metadata</h3>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-sm text-zinc-400">Label</label>
+                <input
+                  value={editedLabel}
+                  onChange={(e) => setEditedLabel(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm text-zinc-400">Webhook URL</label>
+                <input
+                  value={editedWebhookUrl}
+                  onChange={(e) => setEditedWebhookUrl(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+              {metadataError && <p className="text-sm text-red-400">{metadataError}</p>}
+            </div>
+            <div className="flex justify-end gap-2">
               <button
-                onClick={() => setShowUnsavedWarning(false)}
-                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+                onClick={handleCancelMetadataEdit}
+                className="px-3 py-1.5 rounded-lg border border-zinc-700 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
               >
-                Keep Editing
+                Cancel
+              </button>
+              <button
+                onClick={saveMetadata}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900 p-5 space-y-4">
+            <h3 className="text-base font-semibold text-zinc-100">Delete contract?</h3>
+            <p className="text-sm text-zinc-400">This will remove the contract and its alert history.</p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowDelete(false)}
+                className="px-3 py-1.5 rounded-lg border border-zinc-700 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-medium text-white transition-colors"
+              >
+                Delete
               </button>
             </div>
           </div>
