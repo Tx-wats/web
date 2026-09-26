@@ -17,6 +17,23 @@ export interface SyncStatus {
 
 const STATUS_KEY = 'txwatch_sync_status'
 
+/** Storage key used by the local contract cache; storage events on it signal cross-tab changes. */
+export const CONTRACTS_STORAGE_KEY = 'txwatch_contracts'
+
+/**
+ * Subscribe to cross-tab contract changes. The callback fires whenever another
+ * tab writes to the contracts cache (add, delete, or refresh). Returns an
+ * unsubscribe function.
+ */
+export function subscribeToContractChanges(onChange: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  const handler = (e: StorageEvent) => {
+    if (e.key === null || e.key === CONTRACTS_STORAGE_KEY) onChange()
+  }
+  window.addEventListener('storage', handler)
+  return () => window.removeEventListener('storage', handler)
+}
+
 export function getSyncStatuses(): Record<string, SyncStatus> {
   try {
     return JSON.parse(localStorage.getItem(STATUS_KEY) ?? '{}')
