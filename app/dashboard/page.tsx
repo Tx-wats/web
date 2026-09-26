@@ -1,23 +1,167 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useContracts } from '@/lib/useContracts'
-import { getTodayAlertCount, getAlerts, getNetworkDistribution } from '@/lib/storage'
+import { getTodayAlertCount, getAlerts, getNetworkDistribution, onAlertsChange } from '@/lib/storage'
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
 import NetworkBadge from '@/components/NetworkBadge'
-import { Network } from '@/types'
+import DashboardSkeleton from '@/components/DashboardSkeleton'
+import { Network, Alert } from '@/types'
+
+const DAY_MS = 24 * 60 * 60 * 1000
+const HOUR_MS = 60 * 60 * 1000
+
+interface AlertBucket {
+  label: string
+  count: number
+}
+
+function bucketAlerts(alerts: Alert[], now: number, bucketMs: number, bucketCount: number): AlertBucket[] {
+  const buckets: AlertBucket[] = []
+  for (let i = bucketCount - 1; i >= 0; i--) {
+    const start = now - (i + 1) * bucketMs
+    const end = now - i * bucketMs
+    const count = alerts.filter((a) => a.timestamp > start && a.timestamp <= end).length
+    const date = new Date(end)
+    const label =
+      bucketMs === DAY_MS
+        ? date.toLocaleDateString(undefined, { weekday: 'short' })
+        : date.toLocaleTimeString(undefined, { hour: 'numeric' })
+    buckets.push({ label, count })
+  }
+  return buckets
+}
+
+function AlertActivityChart({ title, buckets }: { title: string; buckets: AlertBucket[] }) {
+  const max = Math.max(1, ...buckets.map((b) => b.count))
+  const width = 320
+  const height = 120
+  const gap = 6
+  const barWidth = (width - gap * (buckets.length - 1)) / buckets.length
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+      <h2 className="text-sm font-semibold text-zinc-200">{title}</h2>
+      <svg
+        role="img"
+        aria-label={`${title} bar chart`}
+        viewBox={`0 0 ${width} ${height}`}
+        className="mt-4 w-full h-32"
+        preserveAspectRatio="none"
+      >
+        {buckets.map((bucket, i) => {
+          const barHeight = (bucket.count / max) * (height - 20)
+          const x = i * (barWidth + gap)
+          const y = height - barHeight
+          return (
+            <g key={i}>
+              <rect
+                x={x}
+                y={y}
+                width={barWidth}
+                height={barHeight}
+                rx={2}
+                className="fill-indigo-500"
+              />
+              <text
+                x={x + barWidth / 2}
+                y={height - 4}
+                textAnchor="middle"
+                className="fill-zinc-500"
+                fontSize={9}
+              >
+                {bucket.label}
+              </text>
+            </g>
+          )
+        })}
+      </svg>
+      <table className="sr-only">
+        <caption>{title}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Period</th>
+            <th scope="col">Alerts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {buckets.map((bucket, i) => (
+            <tr key={i}>
+              <th scope="row">{bucket.label}</th>
+              <td>{bucket.count}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+const DASHBOARD_CARD_LIMIT = 6
 
 export default function DashboardPage() {
   const { contracts } = useContracts()
   const [alertsToday, setAlertsToday] = useState(0)
+  const [allAlerts, setAllAlerts] = useState<Alert[]>([])
   const [mounted, setMounted] = useState(false)
 
-  useEffect(() => {
+  const refreshAlertsToday = useCallback(() => {
     setAlertsToday(getTodayAlertCount())
+    const collected: Alert[] = []
+    for (const contract of contracts) {
+      collected.push(...getAlerts(contract.id))
+    }
+    setAllAlerts(collected)
     setMounted(true)
+  }, [contracts])
+
+  const now = Date.now()
+  const dailyBuckets = useMemo(
+    () => bucketAlerts(allAlerts, now, DAY_MS, 7),
+    [allAlerts, now]
+  )
+  const hourlyBuckets = useMemo(
+    () => bucketAlerts(allAlerts, now, HOUR_MS, 24),
+    [allAlerts, now]
+  )
   }, [])
+
+  useEffect(() => {
+    refreshAlertsToday()
+    setMounted(true)
+  }, [refreshAlertsToday])
+
+  // Recompute when alerts change (e.g. another tab or a future API sync).
+  useEffect(() => {
+    const unsubscribe = onAlertsChange(refreshAlertsToday)
+    return unsubscribe
+  }, [refreshAlertsToday])
+
+  // Recompute when the window regains focus.
+  useEffect(() => {
+    window.addEventListener('focus', refreshAlertsToday)
+    return () => window.removeEventListener('focus', refreshAlertsToday)
+  }, [refreshAlertsToday])
+
+  // Recompute at local midnight so the count rolls over without a reload.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
+
+    function scheduleMidnight() {
+      const now = new Date()
+      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+      timer = setTimeout(() => {
+        refreshAlertsToday()
+        scheduleMidnight()
+      }, midnight.getTime() - now.getTime())
+    }
+
+    scheduleMidnight()
+    return () => clearTimeout(timer)
+  }, [refreshAlertsToday])
 
   const activeWebhooks = contracts.filter((c) => c.webhook_url).length
   const networkCounts = contracts.length > 0 ? getNetworkDistribution() : ({} as Record<Network, number>)
@@ -29,6 +173,18 @@ export default function DashboardPage() {
     const alerts = getAlerts(contractId)
     return alerts[0]?.timestamp
   }
+
+  if (!mounted) return <DashboardSkeleton />
+  // Sort by most recent alert (descending), then by label (ascending).
+  const sortedContracts = [...contracts].sort((a, b) => {
+    const aAlert = lastAlertTime(a.id) ?? 0
+    const bAlert = lastAlertTime(b.id) ?? 0
+    if (bAlert !== aAlert) return bAlert - aAlert
+    return a.label.localeCompare(b.label)
+  })
+
+  const visibleContracts = sortedContracts.slice(0, DASHBOARD_CARD_LIMIT)
+  const hasMoreContracts = sortedContracts.length > DASHBOARD_CARD_LIMIT
 
   if (!mounted) return null
 
@@ -84,6 +240,12 @@ export default function DashboardPage() {
         </Link>
       </div>
 
+      {/* Alert activity charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <AlertActivityChart title="Alerts — last 7 days" buckets={dailyBuckets} />
+        <AlertActivityChart title="Alerts — last 24 hours" buckets={hourlyBuckets} />
+      </div>
+
       {/* Contract list */}
       {contracts.length === 0 ? (
         <EmptyState
@@ -99,10 +261,22 @@ export default function DashboardPage() {
           }
         />
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {contracts.map((c) => (
-            <ContractCard key={c.id} contract={c} lastAlertTime={lastAlertTime(c.id)} />
-          ))}
+        <div className="space-y-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {visibleContracts.map((c) => (
+              <ContractCard key={c.id} contract={c} lastAlertTime={lastAlertTime(c.id)} />
+            ))}
+          </div>
+          {hasMoreContracts && (
+            <div className="flex justify-center">
+              <Link
+                href="/contracts"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm font-medium text-zinc-300 transition-colors"
+              >
+                View all contracts
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>
