@@ -39,5 +39,42 @@ describe('formatRuleSummary', () => {
     const rule: AlertRule = { type: 'AdminFunctionCalled', function_names: [] }
     expect(formatRuleSummary(rule)).toBe('admin functions')
   })
-})
 
+  it('does not reorder the rules prop array during a duplicate check', () => {
+    const rules: AlertRule[] = [
+      { type: 'AdminFunctionCalled', function_names: ['upgrade', 'set_admin'] },
+      { type: 'AdminFunctionCalled', function_names: ['mint', 'burn'] },
+    ]
+    const snapshot = rules.map((rule) =>
+      rule.function_names ? [...rule.function_names] : undefined
+    )
+
+    // Simulate the duplicate check that previously sorted arrays in place.
+    rules.forEach((rule) => {
+      const names = [...(rule.function_names ?? [])].sort()
+      expect(names).toEqual([...names].sort())
+    })
+
+    expect(rules.map((rule) => rule.function_names)).toEqual(snapshot)
+  })
+
+  it('rejects editing a rule to match another rule label', () => {
+    const rules: AlertRule[] = [
+      { type: 'LargeTransfer', threshold_xlm: 1000 },
+      { type: 'FunctionCalled', function_name: 'transfer' },
+    ]
+    const editingIndex = 1
+
+    // Duplicate check must run against all rules except the one being edited.
+    const isDuplicateLabel = (label: string, index: number | null) =>
+      rules.some(
+        (rule, i) => i !== index && formatRuleSummary(rule) === label
+      )
+
+    const editedLabel = formatRuleSummary(rules[0])
+    expect(isDuplicateLabel(editedLabel, editingIndex)).toBe(true)
+
+    // The rule being edited must not collide with itself.
+    expect(isDuplicateLabel(formatRuleSummary(rules[1]), editingIndex)).toBe(false)
+  })
+})

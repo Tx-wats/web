@@ -63,14 +63,15 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
     setWarning(null)
   }
 
-  function isDuplicateLabel(newRule: AlertRule): boolean {
-    return rules.some((rule) => {
+  function isDuplicateLabel(newRule: AlertRule, ignoreIndex: number | null = null): boolean {
+    return rules.some((rule, index) => {
+      if (ignoreIndex !== null && index === ignoreIndex) return false
       if (newRule.type !== rule.type) return false
       if (newRule.type === 'LargeTransfer') return newRule.threshold_xlm === rule.threshold_xlm
       if (newRule.type === 'FunctionCalled') return newRule.function_name === rule.function_name
       if (newRule.type === 'AdminFunctionCalled') {
-        const newNames = (newRule.function_names ?? []).sort().join(',')
-        const existingNames = (rule.function_names ?? []).sort().join(',')
+        const newNames = [...(newRule.function_names ?? [])].sort().join(',')
+        const existingNames = [...(rule.function_names ?? [])].sort().join(',')
         return newNames === existingNames
       }
       return true // AnyTransaction and TransactionFailed
@@ -116,6 +117,10 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
       newRule = { ...newRule, function_names: [...names].sort() }
     }
     if (editingIndex !== null) {
+      if (isDuplicateLabel(newRule, editingIndex)) {
+        setWarning('This rule already exists')
+        return
+      }
       const updated = [...rules]
       updated[editingIndex] = newRule
       onChange(updated)
@@ -158,6 +163,19 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
     const updated = rules.filter((_, i) => i !== index)
     onChange(updated)
     onRulesChanged?.(updated, 'remove')
+    // Keep editingIndex pointing at the same logical rule after removal.
+    // Removing a rule before the edited one shifts it down by one; removing
+    // the edited rule itself cancels the edit to avoid targeting a stale index.
+    setEditingIndex((prev) => {
+      if (prev === null) return null
+      if (prev === index) {
+        setDraft(emptyRule())
+        setError(null)
+        setWarning(null)
+        return null
+      }
+      return prev > index ? prev - 1 : prev
+    })
   }
 
   return (
@@ -237,6 +255,9 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
             onClick={addRule}
             className="px-3 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white"
           >
+            <svg c
+
+/* … truncated 2751 chars — edit only what you need near the top … */
             {editingIndex !== null ? 'Save Rule' : 'Add Rule'}
           </button>
           {editingIndex !== null && (
