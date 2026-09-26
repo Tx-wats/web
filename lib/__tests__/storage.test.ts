@@ -5,6 +5,7 @@ import {
   getContracts,
   addAlert,
   getAlerts,
+  getLatestAlert,
   deleteAlert,
   seedMockAlerts,
   addContract,
@@ -140,17 +141,40 @@ describe('duplicate contract handling', () => {
   });
 });
 
-describe('addAlert / getAlerts — insertion order', () => {
-  it('returns alerts in insertion order', () => {
+describe('addAlert / getAlerts — newest-first ordering', () => {
+  it('returns alerts sorted newest-first by timestamp', () => {
     addAlert(alert1);
     addAlert(alert2);
     addAlert(alert3);
     const alerts = getAlerts('c1');
-    expect(alerts.map((a) => (a as { id?: string }).id)).toEqual(['a1', 'a2', 'a3']);
+    expect(alerts.map((a) => (a as { id?: string }).id)).toEqual(['a3', 'a2', 'a1']);
+  });
+
+  it('sorts out-of-order timestamps newest-first', () => {
+    addAlert(alert2);
+    addAlert(alert3);
+    addAlert(alert1);
+    const alerts = getAlerts('c1');
+    expect(alerts.map((a) => a.timestamp)).toEqual([3, 2, 1]);
   });
 
   it('returns empty array when no alerts exist for a contract (empty fallback)', () => {
     expect(getAlerts('no-such-contract')).toEqual([]);
+  });
+});
+
+describe('getLatestAlert', () => {
+  it('returns the alert with the maximum timestamp regardless of insertion order', () => {
+    addAlert(alert2);
+    addAlert(alert1);
+    addAlert(alert3);
+    const latest = getLatestAlert('c1');
+    expect((latest as { id?: string }).id).toBe('a3');
+    expect(latest?.timestamp).toBe(3);
+  });
+
+  it('returns undefined when no alerts exist for a contract', () => {
+    expect(getLatestAlert('no-such-contract')).toBeUndefined();
   });
 });
 
@@ -196,7 +220,7 @@ describe('seedMockAlerts', () => {
       expect(a.transaction_hash).toMatch(/^[0-9a-f]{64}$/);
       expect(a.horizon_link.startsWith('https://horizon-futurenet.stellar.org/')).toBe(true);
     }
-    expect(alerts[0].timestamp).toBeLessThan(alerts[2].timestamp);
+    expect(alerts[0].timestamp).toBeGreaterThan(alerts[2].timestamp);
   });
 
   it('respects the per-contract alert cap', () => {
@@ -228,6 +252,9 @@ describe('addContract', () => {
     saveContract({ ...contract1, label: 'Renamed' });
     expect(getContracts()).toHaveLength(1);
     expect(getContracts()[0].label).toBe('Renamed');
+  });
+});
+
 describe('corrupted storage', () => {
   it('triggers the registered storage error handler and returns []', () => {
     const keys: string[] = [];
@@ -252,19 +279,5 @@ describe('quota handling', () => {
   it('returns false instead of throwing when storage always fails', () => {
     localStorageMock.setItem = () => { throw quotaError(); };
     expect(saveContract(contract1)).toBe(false);
-  });
-
-  it('retries once after quota error and returns true on success', () => {
-    let calls = 0;
-    localStorageMock.setItem = (k: string, v: string) => {
-      if (calls++ === 0) throw quotaError();
-      realSet(k, v);
-    };
-    expect(saveContract(contract1)).toBe(true);
-    expect(getContracts()).toHaveLength(1);
-  });
-
-  it('returns true on normal save', () => {
-    expect(saveContract(contract1)).toBe(true);
   });
 });

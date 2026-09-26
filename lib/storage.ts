@@ -231,9 +231,13 @@ export function deleteAlert(alertId: string) {
 }
 
 export function getAlerts(contractId: string): AlertPayload[] {
-  return load<AlertPayload>(ALERTS_KEY).filter(
-    (a) => a.contract_id === contractId
-  )
+  return load<AlertPayload>(ALERTS_KEY)
+    .filter((a) => a.contract_id === contractId)
+    .sort((a, b) => b.timestamp - a.timestamp)
+}
+
+export function getLatestAlert(contractId: string): AlertPayload | undefined {
+  return getAlerts(contractId)[0]
 }
 
 export function seedMockAlerts(
@@ -265,8 +269,6 @@ export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: st
   }
   const all = [...load<AlertPayload>(ALERTS_KEY), normalizedAlert]
   const counts: Record<string, number> = {}
-  save(ALERTS_KEY, all.filter((a) => {
-    counts[a.contract_id] = (counts[a.contract_id] ?? 0) + 1
-    return counts[a.contract_id] <= MAX_ALERTS_PER_CONTRACT
-  }))
+  save(ALERTS_KEY, all)
+  return normalizedAlert
 }
