@@ -24,6 +24,14 @@ const ruleTypes: AlertRuleType[] = [
   'TransactionFailed',
 ]
 
+const validNetworks: Network[] = ['mainnet', 'testnet', 'futurenet']
+
+function resolveNetwork(alert: AlertPayload, fallback: Network): Network {
+  return validNetworks.includes(alert.network as Network)
+    ? (alert.network as Network)
+    : fallback
+}
+
 function exportCSV(alerts: AlertPayload[]) {
   const rows = [
     ['Time', 'Rule', 'Tx Hash', 'Function', 'Amount'],
@@ -128,13 +136,23 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
                   <td className="py-3 pr-4">
                     <span className="inline-flex items-center gap-2">
                       <a
-                        href={explorerTxUrl(network, alert.transaction_hash)}
+                        href={explorerTxUrl(resolveNetwork(alert, network), alert.transaction_hash)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
                       >
                         {truncateId(alert.transaction_hash)}
                       </a>
+                      {alert.horizon_link && (
+                        <a
+                          href={alert.horizon_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                        >
+                          Horizon
+                        </a>
+                      )}
                       <CopyButton text={alert.transaction_hash} />
                     </span>
                   </td>
