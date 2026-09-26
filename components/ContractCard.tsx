@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { WatchedContract } from '@/types'
 import NetworkBadge from './NetworkBadge'
 import { getSyncStatuses } from '@/lib/contractSync'
@@ -25,15 +25,21 @@ export default function ContractCard({
 }: ContractCardProps) {
   const hasWebhook = Boolean(contract.webhook_url)
   const sync = getSyncStatuses()[contract.id]
-  const [active, setActive] = useState(highlight)
+  const ref = useRef<HTMLAnchorElement>(null)
 
   useEffect(() => {
     if (!highlight) return
-    setActive(true)
-    const id = setTimeout(() => setActive(false), 2500)
-    return () => clearTimeout(id)
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [highlight])
 
+  return (
+    <Link
+      ref={ref}
+      href={`/contracts/${contract.id}`}
+      className={`block bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 hover:bg-zinc-800/60 transition-all group ${
+        highlight ? 'ring-2 ring-indigo-500/40 motion-safe:animate-pulse' : ''
+      }`}
+    >
   const cardClassName = `block bg-zinc-900 border rounded-xl p-5 transition-all group ${
     selected
       ? 'border-indigo-500 ring-2 ring-indigo-500/40'

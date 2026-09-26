@@ -31,11 +31,23 @@ interface RuleBuilderProps {
 
 const emptyRule = (): AlertRule => ({ type: 'AnyTransaction' })
 
+function parseFunctionNames(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
 export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBuilderProps) {
   const [draft, setDraft] = useState<AlertRule>(emptyRule())
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
+  // Raw text for the AdminFunctionCalled input so commas are not eaten while typing.
+  const [functionNamesText, setFunctionNamesText] = useState('')
+  // Raw text for the LargeTransfer threshold so values like "0.5" can be typed
+  // without being coerced/cleared mid-edit. Parsed only on add.
+  const [thresholdText, setThresholdText] = useState('')
 
   function updateDraft(patch: Partial<AlertRule>) {
     setDraft((prev) => ({ ...prev, ...patch }))
@@ -45,6 +57,8 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
 
   function handleTypeChange(type: AlertRuleType) {
     setDraft({ type })
+    setFunctionNamesText('')
+    setThresholdText('')
     setError(null)
     setWarning(null)
   }
@@ -68,15 +82,19 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
   }
 
   function addRule() {
+    let newRule: AlertRule = { ...draft }
     if (draft.type === 'LargeTransfer') {
-      if (draft.threshold_xlm === undefined || draft.threshold_xlm === null || isNaN(draft.threshold_xlm)) {
+      // Only an empty string is treated as undefined; otherwise parse the raw text.
+      const parsed = thresholdText.trim() === '' ? undefined : parseFloat(thresholdText)
+      if (parsed === undefined || isNaN(parsed)) {
         setError('Enter a valid XLM threshold')
         return
       }
-      if (draft.threshold_xlm <= 0) {
+      if (parsed <= 0) {
         setError('Threshold must be greater than 0')
         return
       }
+      newRule = { ...newRule, threshold_xlm: parsed }
     }
     if (draft.type === 'FunctionCalled') {
       if (!draft.function_name?.trim()) {
@@ -89,14 +107,14 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
       }
     }
     if (draft.type === 'AdminFunctionCalled') {
-      if (!draft.function_names?.length) {
+      const names = parseFunctionNames(functionNamesText)
+      if (!names.length) {
         setError('Enter at least one function name')
         return
       }
-      // Sort function names for consistency
-      draft.function_names = [...draft.function_names].sort()
+      // Sort function names for consistency, building a new rule immutably.
+      newRule = { ...newRule, function_names: [...names].sort() }
     }
-    const newRule = { ...draft }
     if (editingIndex !== null) {
       const updated = [...rules]
       updated[editingIndex] = newRule
@@ -113,18 +131,25 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
       onRulesChanged?.(updated, 'add')
     }
     setDraft(emptyRule())
+    setFunctionNamesText('')
+    setThresholdText('')
     setError(null)
     setWarning(null)
   }
 
   function startEdit(index: number) {
-    setDraft(rules[index])
+    const rule = rules[index]
+    setDraft(rule)
+    setFunctionNamesText(rule.function_names?.join(', ') ?? '')
+    setThresholdText(rule.threshold_xlm !== undefined ? String(rule.threshold_xlm) : '')
     setEditingIndex(index)
     setError(null)
   }
 
   function cancelEdit() {
     setDraft(emptyRule())
+    setFunctionNamesText('')
+    setThresholdText('')
     setEditingIndex(null)
     setError(null)
   }
@@ -160,8 +185,12 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
               min="0"
               step="any"
               placeholder="e.g. 10000"
-              value={draft.threshold_xlm ?? ''}
-              onChange={(e) => updateDraft({ threshold_xlm: parseFloat(e.target.value) || undefined })}
+              value={thresholdText}
+              onChange={(e) => {
+                setThresholdText(e.target.value)
+                setError(null)
+                setWarning(null)
+              }}
               className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -188,15 +217,12 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
             <input
               type="text"
               placeholder="e.g. set_admin, upgrade, migrate"
-              value={draft.function_names?.join(', ') ?? ''}
-              onChange={(e) =>
-                updateDraft({
-                  function_names: e.target.value
-                    .split(',')
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
+              value={functionNamesText}
+              onChange={(e) => {
+                setFunctionNamesText(e.target.value)
+                setError(null)
+                setWarning(null)
+              }}
               className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -209,18 +235,15 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
           <button
             type="button"
             onClick={addRule}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
+            className="px-3 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            {editingIndex !== null ? 'Update Rule' : 'Add Rule'}
+            {editingIndex !== null ? 'Save Rule' : 'Add Rule'}
           </button>
           {editingIndex !== null && (
             <button
               type="button"
               onClick={cancelEdit}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-sm font-medium text-white transition-colors"
+              className="px-3 py-2 text-sm rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100"
             >
               Cancel
             </button>
@@ -231,33 +254,28 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
       {rules.length > 0 && (
         <ul className="space-y-2">
           {rules.map((rule, i) => (
-            <li key={i} className={`flex items-center justify-between rounded-lg px-3 py-2 border ${editingIndex === i ? 'bg-indigo-900/30 border-indigo-600' : 'bg-zinc-900 border-zinc-800'}`}>
-              <div className="flex items-center gap-2 flex-wrap">
+            <li
+              key={i}
+              className="flex items-center justify-between bg-zinc-800/50 border border-zinc-700 rounded-lg px-3 py-2"
+            >
+              <div className="flex items-center gap-2">
                 <AlertRuleBadge type={rule.type} />
-                {formatRuleSummary(rule) && (
-                  <span className="text-xs font-mono text-zinc-400">{formatRuleSummary(rule)}</span>
-                )}
+                <span className="text-sm text-zinc-300">{formatRuleSummary(rule)}</span>
               </div>
-              <div className="flex gap-1 ml-2">
+              <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => startEdit(i)}
-                  className="text-zinc-600 hover:text-indigo-400 transition-colors"
-                  aria-label="Edit rule"
+                  className="text-xs text-indigo-400 hover:text-indigo-300"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
+                  Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => removeRule(i)}
-                  className="text-zinc-600 hover:text-red-400 transition-colors"
-                  aria-label="Remove rule"
+                  className="text-xs text-red-400 hover:text-red-300"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  Remove
                 </button>
               </div>
             </li>
