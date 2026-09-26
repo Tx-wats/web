@@ -120,3 +120,51 @@ describe('ContractsPage pagination', () => {
     expect(screen.getByRole('button', { name: /next/i })).toBeInTheDocument();
   });
 });
+
+describe('ContractsPage network filter counts and heading', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const networkContracts = [
+    { id: 'a', name: 'Alpha', highlight: false, network: 'mainnet' },
+    { id: 'b', name: 'Beta', highlight: false, network: 'mainnet' },
+    { id: 'c', name: 'Gamma', highlight: false, network: 'testnet' },
+  ];
+
+  it('computes network pill counts from the search-filtered set', () => {
+    (getContracts as jest.Mock).mockReturnValue(networkContracts);
+    render(<ContractsPage />);
+
+    fireEvent.change(screen.getByLabelText(/search/i), {
+      target: { value: 'Alpha' },
+    });
+
+    const mainnetPill = screen.getByRole('button', { name: /mainnet/i });
+    const testnetPill = screen.getByRole('button', { name: /testnet/i });
+
+    expect(mainnetPill).toHaveTextContent('1');
+    expect(testnetPill).toHaveTextContent('0');
+  });
+
+  it('shows "Showing X of Y contracts" when a search filter is active', () => {
+    (getContracts as jest.Mock).mockReturnValue(networkContracts);
+    render(<ContractsPage />);
+
+    fireEvent.change(screen.getByLabelText(/search/i), {
+      target: { value: 'Alpha' },
+    });
+
+    expect(
+      screen.getByText(/showing 1 of 3 contracts/i)
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the plain registered heading when no filter is active', () => {
+    (getContracts as jest.Mock).mockReturnValue(networkContracts);
+    render(<ContractsPage />);
+
+    expect(screen.getByText(/3 registered/i)).toBeInTheDocument();
+    expect(screen.queryByText(/showing/i)).not.toBeInTheDocument();
+  });
+});
