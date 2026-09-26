@@ -1,7 +1,7 @@
 'use client'
 
 import { AlertRuleType } from '@/types'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 const styles: Record<AlertRuleType, string> = {
   LargeTransfer: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
@@ -29,18 +29,28 @@ const descriptions: Record<AlertRuleType, string> = {
 
 export default function AlertRuleBadge({ type }: { type: AlertRuleType }) {
   const [showTooltip, setShowTooltip] = useState(false)
+  const tooltipId = useId()
 
   return (
     <div className="relative inline-block">
-      <span
-        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border cursor-help ${styles[type]}`}
+      <button
+        type="button"
+        aria-describedby={showTooltip ? tooltipId : undefined}
+        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${styles[type]}`}
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
+        onFocus={() => setShowTooltip(true)}
+        onBlur={() => setShowTooltip(false)}
+        onClick={() => setShowTooltip((prev) => !prev)}
       >
         {labels[type]}
-      </span>
+      </button>
       {showTooltip && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200 whitespace-nowrap z-10 pointer-events-none">
+        <div
+          id={tooltipId}
+          role="tooltip"
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200 whitespace-nowrap z-10 pointer-events-none"
+        >
           {descriptions[type]}
         </div>
       )}
