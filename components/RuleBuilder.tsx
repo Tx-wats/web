@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { AlertRule, AlertRuleType } from '@/types'
 import { formatRuleSummary } from '@/lib/format'
+import { getRuleMeta } from '@/lib/ruleMeta'
 import AlertRuleBadge from './AlertRuleBadge'
 
 const RULE_TYPES: AlertRuleType[] = [
@@ -12,14 +13,6 @@ const RULE_TYPES: AlertRuleType[] = [
   'AdminFunctionCalled',
   'TransactionFailed',
 ]
-
-const RULE_EXAMPLES: Record<AlertRuleType, string> = {
-  'AnyTransaction': 'Alert on every transaction',
-  'LargeTransfer': 'Alert when transfer amount exceeds threshold',
-  'FunctionCalled': 'Alert when a specific function is called',
-  'AdminFunctionCalled': 'Alert when admin functions are called',
-  'TransactionFailed': 'Alert on failed transactions',
-}
 
 interface RuleBuilderProps {
   rules: AlertRule[]
@@ -151,10 +144,10 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500"
           >
             {RULE_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>{getRuleMeta(t).label}</option>
             ))}
           </select>
-          <p className="text-xs text-zinc-500 mt-1">{RULE_EXAMPLES[draft.type]}</p>
+          <p className="text-xs text-zinc-500 mt-1">{getRuleMeta(draft.type).description}</p>
         </div>
 
         {draft.type === 'LargeTransfer' && (
@@ -219,13 +212,13 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            {editingIndex !== null ? 'Update Rule' : 'Add Rule'}
+            {editingIndex !== null ? 'Save Rule' : 'Add Rule'}
           </button>
           {editingIndex !== null && (
             <button
               type="button"
               onClick={cancelEdit}
-              className="px-3 py-1.5 rounded-lg border border-zinc-700 text-sm font-medium text-zinc-300 hover:bg-zinc-700/50 transition-colors"
+              className="px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-sm font-medium text-zinc-200 transition-colors"
             >
               Cancel
             </button>
@@ -248,7 +241,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
                 <button
                   type="button"
                   onClick={() => startEdit(index)}
-                  className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700/50 transition-colors"
+                  className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition-colors"
                   aria-label="Edit rule"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -258,7 +251,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
                 <button
                   type="button"
                   onClick={() => removeRule(index)}
-                  className="p-1.5 rounded-md text-zinc-400 hover:text-red-400 hover:bg-zinc-700/50 transition-colors"
+                  className="p-1.5 rounded-md text-zinc-400 hover:text-red-400 hover:bg-zinc-700 transition-colors"
                   aria-label="Remove rule"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
