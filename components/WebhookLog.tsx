@@ -9,6 +9,7 @@ import CopyButton from '@/components/CopyButton'
 import { formatDateTime } from '@/lib/format'
 import { useState } from 'react'
 import AlertRuleBadge from './AlertRuleBadge'
+import { buildCSV } from '@/lib/csv'
 
 interface WebhookLogProps {
   alerts: AlertPayload[]
@@ -34,7 +35,7 @@ function exportCSV(alerts: AlertPayload[]) {
       a.amount !== undefined ? `${a.amount} XLM` : 'N/A',
     ]),
   ]
-  const csv = rows.map((r) => r.map((v) => `"${v}"`).join(',')).join('\n')
+  const csv = buildCSV(rows)
   const blob = new Blob([csv], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
