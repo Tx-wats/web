@@ -256,93 +256,140 @@ describe('contracts page — bulk selection (issue #52)', () => {
     expect(isAllSelected(new Set<string>(), [])).toBe(false)
   })
 
-  it('totalAlertRecords sums alert counts of selected contracts', () => {
+  it('counts alert records across the selection', () => {
     const selected = new Set<string>(['1', '3'])
     expect(totalAlertRecords(selected, items)).toBe(8)
   })
 
-  it('selectedLabels returns labels of selected contracts', () => {
+  it('returns the labels of selected contracts', () => {
     const selected = new Set<string>(['2'])
     expect(selectedLabels(selected, items)).toEqual(['Payment Router'])
   })
 })
 
-describe('contracts page — URL filter params (issue #41)', () => {
-  type ContractItem = {
-    id: string
-    label: string
-    has_active_webhooks: boolean
-    last_alert_at: string | null
+describe('contracts page — URL state sync (issue #42)', () => {
+  const NETWORKS = ['all', 'mainnet', 'testnet', 'futurenet'] as const
+  const SORTS = ['name', 'created', 'alerts'] as const
+  const VIEWS = ['grid', 'list'] as const
+
+  type ListState = {
+    q: string
+    network: (typeof NETWORKS)[number]
+    sort: (typeof SORTS)[number]
+    view: (typeof VIEWS)[number]
+    page: number
   }
 
-  const now = new Date('2024-06-15T12:00:00.000Z')
-
-  function startOfLocalDay(date: Date): Date {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const DEFAULTS: ListState = {
+    q: '',
+    network: 'all',
+    sort: 'name',
+    view: 'grid',
+    page: 1,
   }
 
-  function applyUrlFilter(list: ContractItem[], filter: string | null): ContractItem[] {
-    if (filter === 'alerts-today') {
-      const midnight = startOfLocalDay(now).getTime()
-      return list.filter((c) => {
-        if (!c.last_alert_at) return false
-        return new Date(c.last_alert_at).getTime() >= midnight
-      })
+  function parseState(params: URLSearchParams): ListState {
+    const q = params.get('q') ?? DEFAULTS.q
+
+    const networkParam = params.get('network')
+    const network = (NETWORKS as readonly string[]).includes(networkParam ?? '')
+      ? (networkParam as ListState['network'])
+      : DEFAULTS.network
+
+    const sortParam = params.get('sort')
+    const sort = (SORTS as readonly string[]).includes(sortParam ?? '')
+      ? (sortParam as ListState['sort'])
+      : DEFAULTS.sort
+
+    const viewParam = params.get('view')
+    const view = (VIEWS as readonly string[]).includes(viewParam ?? '')
+      ? (viewParam as ListState['view'])
+      : DEFAULTS.view
+
+    const pageParam = Number.parseInt(params.get('page') ?? '', 10)
+    const page = Number.isFinite(pageParam) && pageParam >= 1 ? pageParam : DEFAULTS.page
+
+    return { q, network, sort, view, page }
+  }
+
+  function serializeState(state: ListState): string {
+    const params = new URLSearchParams()
+    if (state.q) params.set('q', state.q)
+    if (state.network !== DEFAULTS.network) params.set('network', state.network)
+    if (state.sort !== DEFAULTS.sort) params.set('sort', state.sort)
+    if (state.view !== DEFAULTS.view) params.set('view', state.view)
+    if (state.page !== DEFAULTS.page) params.set('page', String(state.page))
+    return params.toString()
+  }
+
+  it('reads initial state from the URL params', () => {
+    const params = new URLSearchParams('q=escrow&network=testnet&sort=alerts&view=list&page=3')
+    expect(parseState(params)).toEqual({
+      q: 'escrow',
+      network: 'testnet',
+      sort: 'alerts',
+      view: 'list',
+      page: 3,
+    })
+  })
+
+  it('falls back to defaults when params are missing', () => {
+    expect(parseState(new URLSearchParams())).toEqual(DEFAULTS)
+  })
+
+  it('falls back to defaults for unknown network, sort and view values', () => {
+    const params = new URLSearchParams('network=devnet&sort=random&view=carousel')
+    expect(parseState(params)).toEqual(DEFAULTS)
+  })
+
+  it('falls back to page 1 for invalid or non-positive page values', () => {
+    expect(parseState(new URLSearchParams('page=abc')).page).toBe(1)
+    expect(parseState(new URLSearchParams('page=0')).page).toBe(1)
+    expect(parseState(new URLSearchParams('page=-4')).page).toBe(1)
+  })
+
+  it('omits default values when serializing', () => {
+    expect(serializeState(DEFAULTS)).toBe('')
+  })
+
+  it('round-trips non-default state through the URL', () => {
+    const state: ListState = {
+      q: 'router',
+      network: 'mainnet',
+      sort: 'created',
+      view: 'list',
+      page: 2,
     }
-    if (filter === 'webhooks') {
-      return list.filter((c) => c.has_active_webhooks)
+    const params = new URLSearchParams(serializeState(state))
+    expect(parseState(params)).toEqual(state)
+  })
+
+  it('round-trips state with a search query containing spaces', () => {
+    const state: ListState = { ...DEFAULTS, q: 'escrow manager' }
+    const params = new URLSearchParams(serializeState(state))
+    expect(parseState(params).q).toBe('escrow manager')
+  })
+
+  it('debounces search query URL updates', () => {
+    jest.useFakeTimers()
+    const replace = jest.fn()
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const scheduleSearchUpdate = (value: string) => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => replace(value), 300)
     }
-    return list
-  }
 
-  const items: ContractItem[] = [
-    {
-      id: '1',
-      label: 'Escrow Manager',
-      has_active_webhooks: true,
-      last_alert_at: '2024-06-15T09:30:00.000Z',
-    },
-    {
-      id: '2',
-      label: 'Payment Router',
-      has_active_webhooks: false,
-      last_alert_at: '2024-06-14T23:00:00.000Z',
-    },
-    {
-      id: '3',
-      label: 'Token Service',
-      has_active_webhooks: true,
-      last_alert_at: null,
-    },
-  ]
+    scheduleSearchUpdate('e')
+    scheduleSearchUpdate('es')
+    scheduleSearchUpdate('esc')
 
-  it('returns all contracts when no filter param is present', () => {
-    expect(applyUrlFilter(items, null)).toHaveLength(3)
-  })
+    expect(replace).not.toHaveBeenCalled()
 
-  it('alerts-today returns only contracts with an alert since local midnight', () => {
-    const result = applyUrlFilter(items, 'alerts-today')
-    expect(result.map((c) => c.id)).toEqual(['1'])
-  })
+    jest.advanceTimersByTime(300)
+    expect(replace).toHaveBeenCalledTimes(1)
+    expect(replace).toHaveBeenCalledWith('esc')
 
-  it('alerts-today excludes contracts with no alert timestamp', () => {
-    const result = applyUrlFilter(items, 'alerts-today')
-    expect(result.some((c) => c.id === '3')).toBe(false)
-  })
-
-  it('webhooks returns only contracts with active webhooks', () => {
-    const result = applyUrlFilter(items, 'webhooks')
-    expect(result.map((c) => c.id)).toEqual(['1', '3'])
-  })
-
-  it('unknown filter values fall back to the unfiltered list', () => {
-    expect(applyUrlFilter(items, 'bogus')).toHaveLength(3)
-  })
-
-  it('clearing the filter removes the param from the URL', () => {
-    const params = new URLSearchParams('filter=webhooks&q=escrow')
-    params.delete('filter')
-    expect(params.get('filter')).toBeNull()
-    expect(params.get('q')).toBe('escrow')
+    jest.useRealTimers()
   })
 })
