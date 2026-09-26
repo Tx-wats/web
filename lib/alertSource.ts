@@ -55,6 +55,23 @@ export function filterNewAlerts(
 }
 
 /**
+ * Parse the cached `txwatch_alerts` array once and return the latest alert
+ * timestamp per contract id. Avoids re-parsing the whole array for every card
+ * on every render (e.g. while typing in the search box).
+ */
+export function getLatestAlertTimestamps(): Record<string, number> {
+  const latest: Record<string, number> = {}
+  for (const alert of getAlerts()) {
+    const id = alert.contract_id
+    if (!id) continue
+    const ts = alert.timestamp
+    if (typeof ts !== 'number') continue
+    if (latest[id] === undefined || ts > latest[id]) latest[id] = ts
+  }
+  return latest
+}
+
+/**
  * Fetch alerts from core and merge new ones into the local cache.
  * Returns the newly added alerts (oldest first).
  */
