@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { AlertRule, AlertRuleType } from '@/types'
 import { formatRuleSummary } from '@/lib/format'
+import { getRuleMeta } from '@/lib/ruleMeta'
 import AlertRuleBadge from './AlertRuleBadge'
 
 const RULE_TYPES: AlertRuleType[] = [
@@ -13,12 +14,21 @@ const RULE_TYPES: AlertRuleType[] = [
   'TransactionFailed',
 ]
 
-const RULE_EXAMPLES: Record<AlertRuleType, string> = {
-  'AnyTransaction': 'Alert on every transaction',
-  'LargeTransfer': 'Alert when transfer amount exceeds threshold',
-  'FunctionCalled': 'Alert when a specific function is called',
-  'AdminFunctionCalled': 'Alert when admin functions are called',
-  'TransactionFailed': 'Alert on failed transactions',
+/** XLM supports at most 7 decimal places (stroops). */
+const MAX_XLM_DECIMALS = 7
+/** Total XLM supply — a reasonable upper bound for a transfer threshold. */
+const MAX_XLM_THRESHOLD = 50_000_000_000
+
+/** Returns true when the value has no more than 7 decimal places. */
+function hasValidPrecision(value: number): boolean {
+  if (!isFinite(value)) return false
+  const decimals = (String(value).split('.')[1] ?? '').length
+  return decimals <= MAX_XLM_DECIMALS
+}
+
+/** Formats a number with thousands separators, preserving up to 7 decimals. */
+function formatXlm(value: number): string {
+  return value.toLocaleString('en-US', { maximumFractionDigits: MAX_XLM_DECIMALS })
 }
 
 interface RuleBuilderProps {
@@ -68,7 +78,9 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
       if (ignoreIndex !== null && index === ignoreIndex) return false
       if (newRule.type !== rule.type) return false
       if (newRule.type === 'LargeTransfer') return newRule.threshold_xlm === rule.threshold_xlm
-      if (newRule.type === 'FunctionCalled') return newRule.function_name === rule.function_name
+      if (newRule.type === 'FunctionCalled') {
+        return newRule.function_name?.trim() === rule.function_name?.trim()
+      }
       if (newRule.type === 'AdminFunctionCalled') {
         const newNames = [...(newRule.function_names ?? [])].sort().join(',')
         const existingNames = [...(rule.function_names ?? [])].sort().join(',')
@@ -95,6 +107,14 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
         setError('Threshold must be greater than 0')
         return
       }
+      if (!hasValidPrecision(draft.threshold_xlm)) {
+        setError('Threshold supports at most 7 decimal places')
+        return
+      }
+      if (draft.threshold_xlm > MAX_XLM_THRESHOLD) {
+        setError(`Threshold cannot exceed ${formatXlm(MAX_XLM_THRESHOLD)} XLM`)
+        return
+      }
       newRule = { ...newRule, threshold_xlm: parsed }
     }
     if (draft.type === 'FunctionCalled') {
@@ -115,6 +135,10 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
       }
       // Sort function names for consistency, building a new rule immutably.
       newRule = { ...newRule, function_names: [...names].sort() }
+    }
+    const newRule = { ...draft }
+    if (newRule.type === 'FunctionCalled' && newRule.function_name) {
+      newRule.function_name = newRule.function_name.trim()
     }
     if (editingIndex !== null) {
       if (isDuplicateLabel(newRule, editingIndex)) {
@@ -189,10 +213,10 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500"
           >
             {RULE_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>{getRuleMeta(t).label}</option>
             ))}
           </select>
-          <p className="text-xs text-zinc-500 mt-1">{RULE_EXAMPLES[draft.type]}</p>
+          <p className="text-xs text-zinc-500 mt-1">{getRuleMeta(draft.type).description}</p>
         </div>
 
         {draft.type === 'LargeTransfer' && (
@@ -211,6 +235,11 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
               }}
               className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
             />
+            {draft.threshold_xlm !== undefined && draft.threshold_xlm !== null && !isNaN(draft.threshold_xlm) && (
+              <p className="text-xs text-zinc-500 mt-1">
+                Threshold: {formatXlm(draft.threshold_xlm)} XLM
+              </p>
+            )}
           </div>
         )}
 
@@ -253,6 +282,8 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
           <button
             type="button"
             onClick={addRule}
+            className="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+          >
             className="px-3 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white"
           >
             <svg c
@@ -264,6 +295,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
             <button
               type="button"
               onClick={cancelEdit}
+              className="px-3 py-1.5 text-sm bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-colors"
               className="px-3 py-2 text-sm rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100"
             >
               Cancel
@@ -274,6 +306,20 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
 
       {rules.length > 0 && (
         <ul className="space-y-2">
+          {rules.map((rule, index) => (
+            <li
+              key={index}
+              className="flex items-center justify-between bg-zinc-800/50 border border-zinc-700 rounded-lg px-3 py-2"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <AlertRuleBadge rule={rule} />
+                <span className="text-sm text-zinc-300 truncate">{formatRuleSummary(rule)}</span>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => startEdit(index)}
+                  className="text-xs text-zinc-400 hover:text-zinc-100 transition-colors"
           {rules.map((rule, i) => (
             <li
               key={i}
@@ -293,6 +339,8 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
                 </button>
                 <button
                   type="button"
+                  onClick={() => removeRule(index)}
+                  className="text-xs text-red-400 hover:text-red-300 transition-colors"
                   onClick={() => removeRule(i)}
                   className="text-xs text-red-400 hover:text-red-300"
                 >

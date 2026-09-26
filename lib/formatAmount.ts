@@ -18,6 +18,12 @@ const ASSET_DECIMALS: Record<string, number> = {
 
 const DEFAULT_DECIMALS = 7;
 
+/** XLM supports at most 7 decimal places (stroop precision). */
+export const MAX_DECIMALS = 7;
+
+/** Total XLM supply — the sensible upper bound for a transfer threshold. */
+export const MAX_XLM_SUPPLY = 50_000_000_000n;
+
 interface Decimal {
   /** Signed integer numerator; the value is units / 10^scale. */
   units: bigint;
@@ -74,6 +80,27 @@ function toValue(raw: AmountInput, stroops: boolean, decimals: number): Decimal 
   return stroops ? { units: d.units, scale: d.scale + decimals } : d;
 }
 
+/**
+ * Validates a LargeTransfer threshold: at most 7 decimal places (stroop precision)
+ * and no more than the total XLM supply. Returns an error message, or null when valid.
+ */
+export function validateThreshold(raw: AmountInput): string | null {
+  const d = parseDecimal(raw);
+  if (!d) return 'Enter a valid amount.';
+  if (d.units < 0n) return 'Threshold must not be negative.';
+  if (d.scale > MAX_DECIMALS) return `Use at most ${MAX_DECIMALS} decimal places.`;
+  const units = d.units * pow10(MAX_DECIMALS - d.scale);
+  if (units > MAX_XLM_SUPPLY * pow10(MAX_DECIMALS)) {
+    return `Threshold must not exceed ${formatAmount(MAX_XLM_SUPPLY)}.`;
+  }
+  return null;
+}
+
+/** Renders an integer string with thousands separators (e.g. "50000000000" -> "50,000,000,000"). */
+function groupThousands(int: string): string {
+  return int.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
 export function formatAmount(
   raw: AmountInput,
   asset: string = 'XLM',
@@ -84,7 +111,10 @@ export function formatAmount(
   if (!value) return `— ${asset}`;
   const decimals = options.displayDecimals ?? ASSET_DECIMALS[asset.toUpperCase()] ?? DEFAULT_DECIMALS;
   const label    = asset === 'native' ? 'XLM' : asset.toUpperCase();
-  return `${renderFixed(value, decimals)} ${label}`;
+  const rendered = renderFixed(value, decimals);
+  const [int, frac] = rendered.split('.');
+  const grouped = `${groupThousands(int)}${frac !== undefined ? `.${frac}` : ''}`;
+  return `${grouped} ${label}`;
 }
 
 export function formatAmountValue(
