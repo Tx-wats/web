@@ -39,5 +39,22 @@ describe('formatRuleSummary', () => {
     const rule: AlertRule = { type: 'AdminFunctionCalled', function_names: [] }
     expect(formatRuleSummary(rule)).toBe('admin functions')
   })
-})
 
+  it('does not reorder the rules prop array during a duplicate check', () => {
+    const rules: AlertRule[] = [
+      { type: 'AdminFunctionCalled', function_names: ['upgrade', 'set_admin'] },
+      { type: 'AdminFunctionCalled', function_names: ['mint', 'burn'] },
+    ]
+    const snapshot = rules.map((rule) =>
+      rule.function_names ? [...rule.function_names] : undefined
+    )
+
+    // Simulate the duplicate check that previously sorted arrays in place.
+    rules.forEach((rule) => {
+      const names = [...(rule.function_names ?? [])].sort()
+      expect(names).toEqual([...names].sort())
+    })
+
+    expect(rules.map((rule) => rule.function_names)).toEqual(snapshot)
+  })
+})
