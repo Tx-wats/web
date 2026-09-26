@@ -20,7 +20,7 @@ const labels: Record<AlertRuleType, string> = {
 }
 
 const descriptions: Record<AlertRuleType, string> = {
-  LargeTransfer: 'Alert when a transfer exceeds the specified XLM threshold',
+  LargeTransfer: 'Alert when a transfer is at or above the specified XLM threshold',
   AdminFunctionCalled: 'Alert when admin-level functions are invoked',
   AnyTransaction: 'Alert on any transaction involving this contract',
   FunctionCalled: 'Alert when specific functions are called',

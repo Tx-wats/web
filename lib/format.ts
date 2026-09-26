@@ -44,11 +44,16 @@ export function formatDateTime(timestamp: number): string {
   return new Date(timestamp).toLocaleString()
 }
 
-/** Formats an alert rule as a human-readable summary string. */
+/**
+ * Formats an alert rule as a human-readable summary string.
+ *
+ * The LargeTransfer operator matches tx-watch-core, which fires when a
+ * transfer strictly exceeds the threshold (amount > threshold_xlm).
+ */
 export function formatRuleSummary(rule: AlertRule): string {
   switch (rule.type) {
     case 'LargeTransfer':
-      return `>= ${rule.threshold_xlm.toLocaleString()} XLM`
+      return `> ${rule.threshold_xlm.toLocaleString()} XLM`
     case 'FunctionCalled':
       return rule.function_name || 'function'
     case 'AdminFunctionCalled':

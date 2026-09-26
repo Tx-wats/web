@@ -237,18 +237,15 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
           <button
             type="button"
             onClick={addRule}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
+            className="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
             {editingIndex !== null ? 'Save Rule' : 'Add Rule'}
           </button>
           {editingIndex !== null && (
             <button
               type="button"
               onClick={cancelEdit}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-sm font-medium text-zinc-100 transition-colors"
+              className="px-3 py-1.5 text-sm bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-colors"
             >
               Cancel
             </button>
@@ -261,32 +258,26 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
           {rules.map((rule, index) => (
             <li
               key={index}
-              className="flex items-center justify-between gap-3 bg-zinc-800/50 border border-zinc-700 rounded-lg px-3 py-2"
+              className="flex items-center justify-between bg-zinc-800/50 border border-zinc-700 rounded-lg px-3 py-2"
             >
               <div className="flex items-center gap-2 min-w-0">
-                <AlertRuleBadge type={rule.type} />
+                <AlertRuleBadge rule={rule} />
                 <span className="text-sm text-zinc-300 truncate">{formatRuleSummary(rule)}</span>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => startEdit(index)}
-                  className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition-colors"
-                  aria-label="Edit rule"
+                  className="text-xs text-zinc-400 hover:text-zinc-100 transition-colors"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
+                  Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => removeRule(index)}
-                  className="p-1.5 rounded-md text-zinc-400 hover:text-red-400 hover:bg-zinc-700 transition-colors"
-                  aria-label="Remove rule"
+                  className="text-xs text-red-400 hover:text-red-300 transition-colors"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
+                  Remove
                 </button>
               </div>
             </li>
