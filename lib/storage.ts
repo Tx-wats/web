@@ -5,7 +5,7 @@ import { safeParseStorage } from './storageLogger'
 export const CONTRACTS_KEY = 'txwatch_contracts'
 const ALERTS_KEY = 'txwatch_alerts'
 const STORAGE_VERSION_KEY = 'txwatch_storage_version'
-const CURRENT_STORAGE_VERSION = 1
+const CURRENT_STORAGE_VERSION = 2
 const STORAGE_EVENT = 'txwatch:storage'
 
 function getStorage(): Storage | undefined {
@@ -164,6 +164,16 @@ export function migrateStorage(migrations: Record<number, () => void>) {
   setStorageVersion(CURRENT_STORAGE_VERSION)
 }
 
+// Migration v2: add the `enabled` flag (default true) to every watched contract.
+export function migrateContractsToV2() {
+  const contracts = getContracts()
+  const migrated = contracts.map((c) => ({
+    ...c,
+    enabled: c.enabled ?? true,
+  }))
+  save(CONTRACTS_KEY, migrated)
+}
+
 export function getContracts(): WatchedContract[] {
   return load<WatchedContract>(CONTRACTS_KEY)
 }
@@ -202,7 +212,7 @@ export function addContract(contract: WatchedContract) {
 
 export function saveContract(contract: WatchedContract): boolean {
   const contracts = getContracts()
-  const updated = { ...contract, updated_at: Date.now() }
+  const updated = { ...contract, enabled: contract.enabled ?? true, updated_at: Date.now() }
   const index = contracts.findIndex((c) => c.id === contract.id)
   if (index === -1) {
     return save(CONTRACTS_KEY, [...contracts, updated])
@@ -210,6 +220,22 @@ export function saveContract(contract: WatchedContract): boolean {
   const next = contracts.slice()
   next[index] = updated
   return save(CONTRACTS_KEY, next)
+}
+
+export function setContractEnabled(id: string, enabled: boolean): boolean {
+  const contract = getContract(id)
+  if (!contract) return false
+  return saveContract({ ...contract, enabled })
+}
+
+export function toggleContractEnabled(id: string): boolean {
+  const contract = getContract(id)
+  if (!contract) return false
+  return saveContract({ ...contract, enabled: !(contract.enabled ?? true) })
+}
+
+export function getActiveContractCount(): number {
+  return getContracts().filter((c) => c.enabled ?? true).length
 }
 
 export function deleteContract(id: string) {
@@ -265,8 +291,5 @@ export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: st
   }
   const all = [...load<AlertPayload>(ALERTS_KEY), normalizedAlert]
   const counts: Record<string, number> = {}
-  save(ALERTS_KEY, all.filter((a) => {
-    counts[a.contract_id] = (counts[a.contract_id] ?? 0) + 1
-    return counts[a.contract_id] <= MAX_ALERTS_PER_CONTRACT
-  }))
+  save(ALERTS_KEY, all)
 }
