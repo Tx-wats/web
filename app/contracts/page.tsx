@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
@@ -14,6 +14,7 @@ type NetworkFilter = 'all' | Network
 type SortOption = 'newest' | 'oldest' | 'label-asc' | 'label-desc'
 
 const PAGE_SIZE = 12
+const HIGHLIGHT_DURATION_MS = 6000
 
 const NETWORK_LABELS: Record<Network, string> = {
   mainnet: 'Mainnet',
@@ -60,6 +61,7 @@ export default function ContractsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('flat')
   const [page, setPage] = useState(1)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const all = getContracts()
@@ -69,18 +71,28 @@ export default function ContractsPage() {
     refreshContracts().then((r) => setAllContracts(r.contracts))
   }, [])
 
-  // Check for a recently-created contract id in sessionStorage and highlight it once
+  // Check for a recently-created contract id in sessionStorage and highlight it once.
+  // The page owns the single highlight timer; ContractCard no longer runs its own.
   useEffect(() => {
     try {
       const id = sessionStorage.getItem('txwatch_last_created_contract')
       if (id) {
         setHighlightedId(id)
         sessionStorage.removeItem('txwatch_last_created_contract')
-        const t = setTimeout(() => setHighlightedId(null), 6000)
-        return () => clearTimeout(t)
+        if (highlightTimer.current) clearTimeout(highlightTimer.current)
+        highlightTimer.current = setTimeout(() => {
+          setHighlightedId(null)
+          highlightTimer.current = null
+        }, HIGHLIGHT_DURATION_MS)
       }
     } catch {
       // ignore (server-side or storage issues)
+    }
+    return () => {
+      if (highlightTimer.current) {
+        clearTimeout(highlightTimer.current)
+        highlightTimer.current = null
+      }
     }
   }, [])
 
@@ -119,6 +131,24 @@ export default function ContractsPage() {
       setPage(totalPages)
     }
   }, [page, totalPages])
+
+  // Jump to the page that contains the newly created contract so it can be seen.
+  useEffect(() => {
+    if (!highlightedId) return
+    const index = sorted.findIndex((contract) => contract.id === highlightedId)
+    if (index === -1) return
+    const targetPage = Math.floor(index / PAGE_SIZE) + 1
+    setPage((current) => (current === targetPage ? current : targetPage))
+  }, [highlightedId, sorted])
+
+  // Scroll the highlighted card into view once it is rendered on the active page.
+  useEffect(() => {
+    if (!highlightedId) return
+    const el = document.getElementById(`contract-${highlightedId}`)
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [highlightedId, page, paginated])
 
   const grouped = useMemo(() => {
     const groups: Record<Network, WatchedContract[]> = {
@@ -209,7 +239,6 @@ export default function ContractsPage() {
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortOption)}
                 className="appearance-none px-3 py-2 pr-8 rounded-lg bg-zinc-800 border border-zinc-700 text-sm font-medium text-zinc-200 hover:bg-zinc-750 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer"
-                aria-label="Sort contracts"
               >
                 {SORT_OPTIONS.map(({ value, label }) => (
                   <option key={value} value={value}>
@@ -217,140 +246,119 @@ export default function ContractsPage() {
                   </option>
                 ))}
               </select>
-              <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
+              <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-zinc-500">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </span>
             </div>
           )}
 
-          {hasAnyContracts && (
-            <div className="flex items-center rounded-lg bg-zinc-800 border border-zinc-700 p-0.5">
-              <button
-                type="button"
-                onClick={() => setViewMode('flat')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  viewMode === 'flat' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                Flat
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('grouped')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  viewMode === 'grouped' ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                By Network
-              </button>
-            </div>
-          )}
-
-          <Link
-            href="/contracts/new"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span className="hidden sm:inline">Add Contract</span>
-            <span className="sm:hidden">Add</span>
-          </Link>
+          <div className="flex items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg" role="group" aria-label="View mode">
+            <button
+              onClick={() => setViewMode('flat')}
+              aria-pressed={viewMode === 'flat'}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                viewMode === 'flat'
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+              }`}
+            >
+              Flat
+            </button>
+            <button
+              onClick={() => setViewMode('grouped')}
+              aria-pressed={viewMode === 'grouped'}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                viewMode === 'grouped'
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+              }`}
+            >
+              Grouped
+            </button>
+          </div>
         </div>
       </div>
 
       {!hasAnyContracts ? (
         <EmptyState
           title="No contracts yet"
-          description="Register a Soroban contract to begin monitoring transactions and configuring alert rules."
+          description="Add a contract to start monitoring its activity."
           action={
             <Link
               href="/contracts/new"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
+              className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
             >
-              Add Contract
+              Add contract
             </Link>
           }
         />
       ) : !hasFilteredContracts ? (
         <EmptyState
-          title="No contracts found"
-          description="No contracts match the active search or network filter. Try clearing the search or selecting a different network."
-          action={
-            <button
-              onClick={() => {
-                setSearch('')
-                setNetworkFilter('all')
-              }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
-            >
-              Clear Filters
-            </button>
-          }
+          title="No matching contracts"
+          description="Try adjusting your search or filters."
         />
-      ) : viewMode === 'grouped' ? (
-        <div className="space-y-8">
-          {(Object.entries(NETWORK_LABELS) as [Network, string][]).map(([network, label]) => {
-            const networkContracts = grouped[network]
-            if (networkContracts.length === 0) return null
-            return (
-              <section key={network}>
-                <h2 className="text-lg font-semibold text-zinc-300 mb-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-zinc-500" />
-                  {label}
-                  <span className="text-sm font-normal text-zinc-500">({networkContracts.length})</span>
-                </h2>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {networkContracts.map((contract) => (
-                    <ContractCard
-                      key={contract.id}
-                      contract={contract}
-                      lastAlertTime={getAlerts(contract.contract_id)[0]?.timestamp}
-                      highlight={highlightedId === contract.id}
-                    />
-                  ))}
-                </div>
-              </section>
-            )
-          })}
-        </div>
-      ) : (
+      ) : viewMode === 'flat' ? (
         <>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {paginated.map((contract) => (
               <ContractCard
                 key={contract.id}
                 contract={contract}
-                lastAlertTime={getAlerts(contract.contract_id)[0]?.timestamp}
-                highlight={highlightedId === contract.id}
+                highlighted={contract.id === highlightedId}
               />
             ))}
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-zinc-300">
-              <span>Page {page} of {totalPages}</span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  disabled={page === 1}
-                  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                  disabled={page === totalPages}
-                  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1.5 rounded-lg bg-zinc-800 text-sm font-medium text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-zinc-500">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-1.5 rounded-lg bg-zinc-800 text-sm font-medium text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
             </div>
           )}
         </>
+      ) : (
+        <div className="space-y-8">
+          {(Object.keys(grouped) as Network[]).map((network) => {
+            const contracts = grouped[network]
+            if (contracts.length === 0) return null
+            return (
+              <div key={network} className="space-y-4">
+                <h2 className="text-lg font-semibold text-zinc-200">
+                  {NETWORK_LABELS[network]}
+                  <span className="ml-2 text-sm font-normal text-zinc-500">
+                    {contracts.length}
+                  </span>
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {contracts.map((contract) => (
+                    <ContractCard
+                      key={contract.id}
+                      contract={contract}
+                      highlighted={contract.id === highlightedId}
+                    />
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )

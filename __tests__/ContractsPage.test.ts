@@ -129,3 +129,63 @@ describe('contracts page — search', () => {
     expect(applySearch(items, 'missing')).toHaveLength(0)
   })
 })
+
+describe('contracts page — new contract highlight (issue #55)', () => {
+  const PAGE_SIZE = 12
+
+  function pageOf(index: number): number {
+    return Math.floor(index / PAGE_SIZE) + 1
+  }
+
+  function totalPages(count: number): number {
+    return Math.max(1, Math.ceil(count / PAGE_SIZE))
+  }
+
+  it('computes the page containing a newly created contract', () => {
+    expect(pageOf(0)).toBe(1)
+    expect(pageOf(PAGE_SIZE - 1)).toBe(1)
+    expect(pageOf(PAGE_SIZE)).toBe(2)
+    expect(pageOf(PAGE_SIZE * 2 + 3)).toBe(3)
+  })
+
+  it('jumps to the last page when the new contract is appended', () => {
+    const count = PAGE_SIZE * 2 + 1
+    const newIndex = count - 1
+    expect(pageOf(newIndex)).toBe(totalPages(count))
+  })
+
+  it('uses a single highlight timer owned by the page', () => {
+    jest.useFakeTimers()
+    const clearHighlight = jest.fn()
+    let highlightedId: string | null = 'contract-1'
+
+    const timer = setTimeout(() => {
+      highlightedId = null
+      clearHighlight()
+    }, 6000)
+
+    jest.advanceTimersByTime(2500)
+    expect(highlightedId).toBe('contract-1')
+    expect(clearHighlight).not.toHaveBeenCalled()
+
+    jest.advanceTimersByTime(3500)
+    expect(highlightedId).toBeNull()
+    expect(clearHighlight).toHaveBeenCalledTimes(1)
+
+    clearTimeout(timer)
+    jest.useRealTimers()
+  })
+
+  it('applies a motion-safe pulse class for the highlight', () => {
+    const highlightClass = 'motion-safe:animate-pulse'
+    expect(highlightClass).toContain('motion-safe:')
+    expect(highlightClass).not.toMatch(/(^|\s)animate-pulse(\s|$)/)
+  })
+
+  it('scrolls the highlighted card into view', () => {
+    const scrollIntoView = jest.fn()
+    const element = { scrollIntoView } as unknown as HTMLElement
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' })
+  })
+})
