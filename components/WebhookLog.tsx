@@ -9,6 +9,7 @@ import CopyButton from '@/components/CopyButton'
 import { formatDateTime } from '@/lib/format'
 import { useState } from 'react'
 import AlertRuleBadge from './AlertRuleBadge'
+import Modal from './Modal'
 
 interface WebhookLogProps {
   alerts: AlertPayload[]
@@ -46,6 +47,7 @@ function exportCSV(alerts: AlertPayload[]) {
 
 export default function WebhookLog({ alerts, network }: WebhookLogProps) {
   const [selectedFilter, setSelectedFilter] = useState<AlertRuleType | null>(null)
+  const [selectedAlert, setSelectedAlert] = useState<AlertPayload | null>(null)
 
   const filteredAlerts = selectedFilter
     ? alerts.filter((a) => a.rule_triggered === selectedFilter)
@@ -117,7 +119,20 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
               {filteredAlerts.map((alert, i) => (
-                <tr key={i} className="hover:bg-zinc-800/30 transition-colors">
+                <tr
+                  key={i}
+                  onClick={() => setSelectedAlert(alert)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setSelectedAlert(alert)
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label="View alert details"
+                  className="hover:bg-zinc-800/30 transition-colors cursor-pointer focus:outline-none focus:bg-zinc-800/50"
+                >
                   <td className="py-3 pr-4 text-zinc-400 whitespace-nowrap">
                     {formatDateTime(alert.timestamp)}
                   </td>
@@ -130,6 +145,7 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
                         href={explorerTxUrl(network, alert.transaction_hash)}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                         className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
                       >
                         {truncateId(alert.transaction_hash)}
@@ -149,6 +165,32 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
           </table>
         )}
       </div>
+
+      {/* Alert Detail Drawer */}
+      <Modal
+        isOpen={selectedAlert !== null}
+        onClose={() => setSelectedAlert(null)}
+        title="Alert Details"
+      >
+        {selectedAlert && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <CopyButton text={JSON.stringify(selectedAlert, null, 2)} label="Copy JSON" />
+              <a
+                href={explorerTxUrl(network, selectedAlert.transaction_hash)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-zinc-700 text-zinc-300 hover:text-zinc-100 transition-colors"
+              >
+                Open in explorer
+              </a>
+            </div>
+            <pre className="overflow-x-auto rounded-lg bg-zinc-900 border border-zinc-800 p-4 text-xs text-zinc-300">
+              {JSON.stringify(selectedAlert, null, 2)}
+            </pre>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 
 export interface WebhookEntry {
   id: string;
@@ -11,6 +11,7 @@ export interface WebhookEntry {
   amount?: string;
   asset?: string;
   txHash?: string;
+  payload?: Record<string, unknown>;
 }
 
 interface WebhookLogCardProps {
@@ -39,60 +40,174 @@ function truncateHash(hash: string, chars = 8): string {
   return `${hash.slice(0, chars)}…${hash.slice(-chars)}`;
 }
 
+function buildPayload(entry: WebhookEntry): Record<string, unknown> {
+  if (entry.payload) return entry.payload;
+  return {
+    id: entry.id,
+    timestamp: entry.timestamp,
+    event: entry.event,
+    status: entry.status,
+    ...(entry.contractAddress ? { contractAddress: entry.contractAddress } : {}),
+    ...(entry.amount ? { amount: entry.amount } : {}),
+    ...(entry.asset ? { asset: entry.asset } : {}),
+    ...(entry.txHash ? { txHash: entry.txHash } : {}),
+  };
+}
+
 export function WebhookLogCard({ entry }: WebhookLogCardProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const payload = buildPayload(entry);
+  const json = JSON.stringify(payload, null, 2);
+
+  const open = useCallback(() => setIsOpen(true), []);
+  const close = useCallback(() => setIsOpen(false), []);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLElement>) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        open();
+      }
+    },
+    [open],
+  );
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(json);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }, [json]);
+
+  const explorerHref = entry.txHash
+    ? `https://stellar.expert/explorer/public/tx/${entry.txHash}`
+    : entry.contractAddress
+      ? `https://stellar.expert/explorer/public/contract/${entry.contractAddress}`
+      : 'https://stellar.expert/explorer/public';
+
   return (
-    <article
-      className="rounded-lg border border-border bg-card p-4 shadow-sm space-y-3"
-      aria-label={`Webhook event ${entry.event} at ${entry.timestamp}`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <span className="font-medium text-sm text-foreground break-all">
-          {entry.event}
-        </span>
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLES[entry.status]}`}
-        >
-          {entry.status}
-        </span>
-      </div>
-
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span aria-label="Time">{formatTimestamp(entry.timestamp)}</span>
-      </div>
-
-      {entry.contractAddress && (
-        <div className="text-xs">
-          <span className="text-muted-foreground">Contract: </span>
-          <span className="font-mono break-all text-foreground">
-            {truncateHash(entry.contractAddress, 6)}
+    <>
+      <article
+        role="button"
+        tabIndex={0}
+        onClick={open}
+        onKeyDown={handleKeyDown}
+        className="rounded-lg border border-border bg-card p-4 shadow-sm space-y-3 cursor-pointer transition-colors hover:bg-accent/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        aria-label={`Webhook event ${entry.event} at ${entry.timestamp}. Open details.`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <span className="font-medium text-sm text-foreground break-all">
+            {entry.event}
           </span>
-        </div>
-      )}
-
-      {entry.amount && (
-        <div className="text-xs">
-          <span className="text-muted-foreground">Amount: </span>
-          <span className="font-medium text-foreground">
-            {entry.amount} {entry.asset ?? ''}
-          </span>
-        </div>
-      )}
-
-      {entry.txHash && (
-        <div className="text-xs">
-          <span className="text-muted-foreground">Tx: </span>
-          <a
-            href={`https://stellar.expert/explorer/public/tx/${entry.txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-mono text-primary hover:underline break-all"
-            aria-label={`View transaction ${entry.txHash} on Stellar Explorer`}
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLES[entry.status]}`}
           >
-            {truncateHash(entry.txHash)}
-          </a>
+            {entry.status}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span aria-label="Time">{formatTimestamp(entry.timestamp)}</span>
+        </div>
+
+        {entry.contractAddress && (
+          <div className="text-xs">
+            <span className="text-muted-foreground">Contract: </span>
+            <span className="font-mono break-all text-foreground">
+              {truncateHash(entry.contractAddress, 6)}
+            </span>
+          </div>
+        )}
+
+        {entry.amount && (
+          <div className="text-xs">
+            <span className="text-muted-foreground">Amount: </span>
+            <span className="font-medium text-foreground">
+              {entry.amount} {entry.asset ?? ''}
+            </span>
+          </div>
+        )}
+
+        {entry.txHash && (
+          <div className="text-xs">
+            <span className="text-muted-foreground">Tx: </span>
+            <a
+              href={`https://stellar.expert/explorer/public/tx/${entry.txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="font-mono text-primary hover:underline break-all"
+              aria-label={`View transaction ${entry.txHash} on Stellar Explorer`}
+            >
+              {truncateHash(entry.txHash)}
+            </a>
+          </div>
+        )}
+      </article>
+
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Alert detail for ${entry.event}`}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') close();
+          }}
+        >
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={close}
+            aria-hidden="true"
+          />
+          <div className="relative z-10 flex h-full w-full max-w-lg flex-col border-l border-border bg-card shadow-xl">
+            <div className="flex items-center justify-between border-b border-border p-4">
+              <h2 className="text-sm font-semibold text-foreground">
+                Alert Detail
+              </h2>
+              <button
+                type="button"
+                onClick={close}
+                autoFocus
+                className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                aria-label="Close detail drawer"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto p-4">
+              <pre className="whitespace-pre-wrap break-all rounded-md bg-muted p-3 text-xs font-mono text-foreground">
+                {json}
+              </pre>
+            </div>
+
+            <div className="flex items-center gap-2 border-t border-border p-4">
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {copied ? 'Copied!' : 'Copy JSON'}
+              </button>
+              <a
+                href={explorerHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                Open in explorer
+              </a>
+            </div>
+          </div>
         </div>
       )}
-    </article>
+    </>
   );
 }
 
