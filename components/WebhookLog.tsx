@@ -6,9 +6,9 @@ import { Network } from '@/types'
 import EmptyState from './EmptyState'
 import { truncateId } from '@/lib/stellar'
 import CopyButton from '@/components/CopyButton'
-import { formatDateTime } from '@/lib/format'
+import { formatDateTime, formatRelativeTime } from '@/lib/format'
 import { formatAmount } from '@/lib/formatAmount'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AlertRuleBadge from './AlertRuleBadge'
 import Modal from './Modal'
 import WebhookLogCard from './WebhookLogCard'
@@ -50,6 +50,13 @@ function exportCSV(alerts: AlertPayload[]) {
 export default function WebhookLog({ alerts, network }: WebhookLogProps) {
   const [selectedFilter, setSelectedFilter] = useState<AlertRuleType | null>(null)
   const [selectedAlert, setSelectedAlert] = useState<AlertPayload | null>(null)
+  const [, setNow] = useState(() => Date.now())
+
+  // Refresh relative time labels every minute
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(interval)
+  }, [])
 
   const filteredAlerts = selectedFilter
     ? alerts.filter((a) => a.rule_triggered === selectedFilter)
@@ -149,7 +156,12 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
                     className="hover:bg-zinc-800/30 transition-colors cursor-pointer focus:outline-none focus:bg-zinc-800/50"
                   >
                     <td className="py-3 pr-4 text-zinc-400 whitespace-nowrap">
-                      {formatDateTime(alert.timestamp)}
+                      <time
+                        dateTime={new Date(alert.timestamp).toISOString()}
+                        title={formatDateTime(alert.timestamp)}
+                      >
+                        {formatRelativeTime(alert.timestamp)}
+                      </time>
                     </td>
                     <td className="py-3 pr-4">
                       <AlertRuleBadge type={alert.rule_triggered as AlertRuleType} />
