@@ -200,11 +200,16 @@ export function addContract(contract: WatchedContract) {
   saveContract(contract)
 }
 
-export function saveContract(contract: WatchedContract) {
 export function saveContract(contract: WatchedContract): boolean {
-  const contracts = getContracts().filter((c) => c.id !== contract.id)
+  const contracts = getContracts()
   const updated = { ...contract, updated_at: Date.now() }
-  return save(CONTRACTS_KEY, [...contracts, updated])
+  const index = contracts.findIndex((c) => c.id === contract.id)
+  if (index === -1) {
+    return save(CONTRACTS_KEY, [...contracts, updated])
+  }
+  const next = contracts.slice()
+  next[index] = updated
+  return save(CONTRACTS_KEY, next)
 }
 
 export function deleteContract(id: string) {
@@ -264,48 +269,4 @@ export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: st
     counts[a.contract_id] = (counts[a.contract_id] ?? 0) + 1
     return counts[a.contract_id] <= MAX_ALERTS_PER_CONTRACT
   }))
-  pruneOldAlerts()
-}
-
-export function getTodayAlertCount(): number {
-  const start = new Date().setHours(0, 0, 0, 0)
-  return load<AlertPayload>(ALERTS_KEY).filter((a) => a.timestamp >= start).length
-}
-
-export function onAlertsChange(callback: () => void): () => void {
-  const handler = (e: StorageEvent) => {
-    if (e.key === ALERTS_KEY) {
-      callback()
-    }
-  }
-  const local = (e: Event) => {
-    if ((e as CustomEvent<{ key: string }>).detail?.key === ALERTS_KEY) {
-      callback()
-    }
-  }
-  window.addEventListener('storage', handler)
-  window.addEventListener(STORAGE_EVENT, local)
-  return () => {
-    window.removeEventListener('storage', handler)
-    window.removeEventListener(STORAGE_EVENT, local)
-  }
-}
-
-export function onContractsChange(callback: () => void): () => void {
-  const handler = (e: StorageEvent) => {
-    if (e.key === CONTRACTS_KEY) {
-      callback()
-    }
-  }
-  const local = (e: Event) => {
-    if ((e as CustomEvent<{ key: string }>).detail?.key === CONTRACTS_KEY) {
-      callback()
-    }
-  }
-  window.addEventListener('storage', handler)
-  window.addEventListener(STORAGE_EVENT, local)
-  return () => {
-    window.removeEventListener('storage', handler)
-    window.removeEventListener(STORAGE_EVENT, local)
-  }
 }

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { WatchedContract } from '@/types'
 import NetworkBadge from './NetworkBadge'
 import { getSyncStatuses } from '@/lib/contractSync'
@@ -10,35 +10,64 @@ interface ContractCardProps {
   contract: WatchedContract
   lastAlertTime?: number
   highlight?: boolean
+  selectable?: boolean
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
 }
 
-export default function ContractCard({ contract, lastAlertTime, highlight }: ContractCardProps) {
+export default function ContractCard({
+  contract,
+  lastAlertTime,
+  highlight,
+  selectable,
+  selected,
+  onToggleSelect,
+}: ContractCardProps) {
   const hasWebhook = Boolean(contract.webhook_url)
   const sync = getSyncStatuses()[contract.id]
-  const [active, setActive] = useState(highlight)
+  const ref = useRef<HTMLAnchorElement>(null)
 
   useEffect(() => {
     if (!highlight) return
-    setActive(true)
-    const id = setTimeout(() => setActive(false), 2500)
-    return () => clearTimeout(id)
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [highlight])
 
   return (
     <Link
+      ref={ref}
       href={`/contracts/${contract.id}`}
       className={`block bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 hover:bg-zinc-800/60 transition-all group ${
-        active ? 'ring-2 ring-indigo-500/40 animate-pulse' : ''
+        highlight ? 'ring-2 ring-indigo-500/40 motion-safe:animate-pulse' : ''
       }`}
     >
+  const cardClassName = `block bg-zinc-900 border rounded-xl p-5 transition-all group ${
+    selected
+      ? 'border-indigo-500 ring-2 ring-indigo-500/40'
+      : 'border-zinc-800 hover:border-zinc-600 hover:bg-zinc-800/60'
+  } ${active ? 'ring-2 ring-indigo-500/40 animate-pulse' : ''}`
+
+  const body = (
+    <>
       <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="min-w-0">
-          <h3 className="font-semibold text-zinc-100 truncate group-hover:text-white">
-            {contract.label}
-          </h3>
-          <p className="text-xs font-mono text-zinc-500 mt-0.5">
-            {truncateId(contract.contract_id)}
-          </p>
+        <div className="flex items-start gap-3 min-w-0">
+          {selectable && (
+            <input
+              type="checkbox"
+              checked={Boolean(selected)}
+              onChange={() => onToggleSelect?.(contract.id)}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`Select ${contract.label}`}
+              className="mt-1 h-4 w-4 flex-shrink-0 rounded border-zinc-600 bg-zinc-800 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer"
+            />
+          )}
+          <div className="min-w-0">
+            <h3 className="font-semibold text-zinc-100 truncate group-hover:text-white">
+              {contract.label}
+            </h3>
+            <p className="text-xs font-mono text-zinc-500 mt-0.5">
+              {truncateId(contract.contract_id)}
+            </p>
+          </div>
         </div>
         <NetworkBadge network={contract.network} />
         {sync && (
@@ -69,6 +98,31 @@ export default function ContractCard({ contract, lastAlertTime, highlight }: Con
           <span>No alerts yet</span>
         )}
       </div>
+    </>
+  )
+
+  if (selectable) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onToggleSelect?.(contract.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onToggleSelect?.(contract.id)
+          }
+        }}
+        className={`${cardClassName} cursor-pointer`}
+      >
+        {body}
+      </div>
+    )
+  }
+
+  return (
+    <Link href={`/contracts/${contract.id}`} className={cardClassName}>
+      {body}
     </Link>
   )
 }
