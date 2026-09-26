@@ -381,3 +381,8 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 ## License
 
 MIT
+
+## Handsoff notes
+
+<!-- handsoff-issue-37 -->
+- #37: Stop Using Array Indexes as React Keys for Rules and Alerts
