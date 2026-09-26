@@ -130,6 +130,88 @@ describe('contracts page — search', () => {
   })
 })
 
+describe('contracts page — bulk selection (issue #52)', () => {
+  type ContractItem = { id: string; label: string; alert_count: number }
+
+  const items: ContractItem[] = [
+    { id: '1', label: 'Escrow Manager', alert_count: 3 },
+    { id: '2', label: 'Payment Router', alert_count: 0 },
+    { id: '3', label: 'Token Service', alert_count: 5 },
+  ]
+
+  function toggleSelection(selected: Set<string>, id: string): Set<string> {
+    const next = new Set(selected)
+    if (next.has(id)) {
+      next.delete(id)
+    } else {
+      next.add(id)
+    }
+    return next
+  }
+
+  function selectAll(list: ContractItem[]): Set<string> {
+    return new Set(list.map((c) => c.id))
+  }
+
+  function isAllSelected(selected: Set<string>, list: ContractItem[]): boolean {
+    return list.length > 0 && list.every((c) => selected.has(c.id))
+  }
+
+  function totalAlertRecords(selected: Set<string>, list: ContractItem[]): number {
+    return list
+      .filter((c) => selected.has(c.id))
+      .reduce((sum, c) => sum + c.alert_count, 0)
+  }
+
+  function selectedLabels(selected: Set<string>, list: ContractItem[]): string[] {
+    return list.filter((c) => selected.has(c.id)).map((c) => c.label)
+  }
+
+  it('starts with nothing selected', () => {
+    expect(new Set<string>().size).toBe(0)
+  })
+
+  it('toggling an id adds it to the selection', () => {
+    const selected = toggleSelection(new Set<string>(), '1')
+    expect(selected.has('1')).toBe(true)
+  })
+
+  it('toggling a selected id removes it', () => {
+    const selected = toggleSelection(new Set<string>(['1']), '1')
+    expect(selected.has('1')).toBe(false)
+  })
+
+  it('select-all selects every contract in the current filter', () => {
+    const selected = selectAll(items)
+    expect(selected.size).toBe(3)
+    expect(isAllSelected(selected, items)).toBe(true)
+  })
+
+  it('isAllSelected is false when only some are selected', () => {
+    const selected = new Set<string>(['1'])
+    expect(isAllSelected(selected, items)).toBe(false)
+  })
+
+  it('isAllSelected is false for an empty list', () => {
+    expect(isAllSelected(new Set<string>(), [])).toBe(false)
+  })
+
+  it('sums alert records across selected contracts', () => {
+    const selected = new Set<string>(['1', '3'])
+    expect(totalAlertRecords(selected, items)).toBe(8)
+  })
+
+  it('total alert records is 0 when nothing is selected', () => {
+    expect(totalAlertRecords(new Set<string>(), items)).toBe(0)
+  })
+
+  it('lists the labels of the selected contracts', () => {
+    const selected = new Set<string>(['1', '3'])
+    expect(selectedLabels(selected, items)).toEqual(['Escrow Manager', 'Token Service'])
+  })
+
+  it('selected labels are empty when nothing is selected', () => {
+    expect(selectedLabels(new Set<string>(), items)).toEqual([])
 describe('contracts page — view mode & sort preference persistence (issue #48)', () => {
   const PREFS_KEY = 'txwatch_prefs'
   type ViewMode = 'flat' | 'grouped'

@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { WatchedContract, Network } from '@/types'
-import { getContracts, getAlerts } from '@/lib/storage'
+import { getContracts, getAlerts, deleteContract } from '@/lib/storage'
 import { refreshContracts } from '@/lib/contractSync'
 import ContractCard from '@/components/ContractCard'
 import EmptyState from '@/components/EmptyState'
+import ContractsSkeleton from '@/components/ContractsSkeleton'
 import { NETWORK_COLORS } from '@/components/NetworkBadge'
 
 type ViewMode = 'flat' | 'grouped'
@@ -110,6 +111,9 @@ export default function ContractsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('flat')
   const [page, setPage] = useState(1)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   useEffect(() => {
     const all = getContracts()
@@ -192,7 +196,57 @@ export default function ContractsPage() {
     return groups
   }, [sorted])
 
-  if (!mounted) return null
+  const selectedContracts = useMemo(
+    () => allContracts.filter((contract) => selectedIds.includes(contract.id)),
+    [allContracts, selectedIds]
+  )
+
+  const selectedAlertCount = useMemo(() => {
+    if (selectedIds.length === 0) return 0
+    const alerts = getAlerts()
+    return alerts.filter((alert) => selectedIds.includes(alert.contract_id)).length
+  }, [selectedIds])
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((contract) => selectedIds.includes(contract.id))
+
+  const toggleSelectionMode = () => {
+    setSelectionMode((prev) => {
+      if (prev) setSelectedIds([])
+      return !prev
+    })
+  }
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]
+    )
+  }
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      const filteredIds = new Set(filtered.map((contract) => contract.id))
+      setSelectedIds((prev) => prev.filter((id) => !filteredIds.has(id)))
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        for (const contract of filtered) next.add(contract.id)
+        return Array.from(next)
+      })
+    }
+  }
+
+  const handleDeleteSelected = () => {
+    for (const id of selectedIds) {
+      deleteContract(id)
+    }
+    setAllContracts((prev) => prev.filter((contract) => !selectedIds.includes(contract.id)))
+    setSelectedIds([])
+    setConfirmOpen(false)
+    setSelectionMode(false)
+  }
+
+  if (!mounted) return <ContractsSkeleton />
 
   const hasAnyContracts = allContracts.length > 0
   const hasFilteredContracts = filtered.length > 0
@@ -238,30 +292,59 @@ export default function ContractsPage() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-lg w-fit" role="group" aria-label="Filter by network">
-          {NETWORK_FILTERS.map(({ value, label }) => {
-            const count = value === 'all' ? allContracts.length : allContracts.filter((contract) => contract.network === value).length
-            const isActive = networkFilter === value
-            return (
-              <button
-                key={value}
-                onClick={() => setNetworkFilter(value)}
-                aria-pressed={isActive}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
-                }`}
-              >
-                {label}
-                <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-indigo-500 text-indigo-100' : 'bg-zinc-800 text-zinc-500'}`}>
-                  {count}
-                </span>
-              </button>
-            )
-          })}
+        <div className="flex flex-wrap items-center gap-2">
+          {NETWORK_FILTERS.map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              onClick={() => setNetworkFilter(filter.value)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                networkFilter === filter.value
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
         </div>
 
+        <div className="flex items-center gap-2">
+          <label htmlFor="contract-sort" className="sr-only">
+            Sort contracts
+          </label>
+          <select
+            id="contract-sort"
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value as SortOption)}
+            className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none"
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            onClick={() => setViewMode((prev) => (prev === 'flat' ? 'grouped' : 'flat'))}
+            className="rounded-lg bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
+          >
+            {viewMode === 'flat' ? 'Group by network' : 'Flat view'}
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleSelectionMode}
+            className={`rounded-lg px-3 py-2 text-sm font-medium ${
+              selectionMode
+                ? 'bg-indigo-600 text-white hover:bg-indigo-500'
+                : 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700'
+            }`}
+          >
+            {selectionMode ? 'Cancel' : 'Select'}
+          </button>
         <div className="flex items-center gap-3">
           {hasAnyContracts && (
             <div className="relative">
@@ -308,6 +391,29 @@ export default function ContractsPage() {
         </div>
       </div>
 
+      {selectionMode && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              className="text-sm font-medium text-indigo-400 hover:text-indigo-300"
+            >
+              {allFilteredSelected ? 'Deselect all' : 'Select all'}
+            </button>
+            <span className="text-sm text-zinc-400">{selectedIds.length} selected</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setConfirmOpen(true)}
+            disabled={selectedIds.length === 0}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Delete selected
+          </button>
+        </div>
+      )}
+
       {!hasAnyContracts ? (
         <EmptyState
           title="No contracts yet"
@@ -324,6 +430,9 @@ export default function ContractsPage() {
             const contracts = grouped[network]
             if (contracts.length === 0) return null
             return (
+              <div key={network} className="space-y-3">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+                  {NETWORK_LABELS[network]}
               <section key={network} className="space-y-3">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
                   {NETWORK_LABELS[network]}
@@ -335,10 +444,13 @@ export default function ContractsPage() {
                       key={contract.id}
                       contract={contract}
                       highlighted={contract.id === highlightedId}
+                      selectionMode={selectionMode}
+                      selected={selectedIds.includes(contract.id)}
+                      onToggleSelected={toggleSelected}
                     />
                   ))}
                 </div>
-              </section>
+              </div>
             )
           })}
         </div>
@@ -349,6 +461,9 @@ export default function ContractsPage() {
               key={contract.id}
               contract={contract}
               highlighted={contract.id === highlightedId}
+              selectionMode={selectionMode}
+              selected={selectedIds.includes(contract.id)}
+              onToggleSelected={toggleSelected}
             />
           ))}
         </div>
@@ -358,6 +473,13 @@ export default function ContractsPage() {
         <div className="flex items-center justify-center gap-2">
           <button
             type="button"
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            disabled={page === 1}
+            className="rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-zinc-400">
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
             className="px-3 py-1.5 rounded-lg bg-zinc-800 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -369,12 +491,44 @@ export default function ContractsPage() {
           </span>
           <button
             type="button"
+            onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+            disabled={page === totalPages}
+            className="rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
             className="px-3 py-1.5 rounded-lg bg-zinc-800 text-sm text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Next
           </button>
+        </div>
+      )}
+
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 space-y-4">
+            <h2 className="text-lg font-semibold text-zinc-100">Delete contracts</h2>
+            <p className="text-sm text-zinc-400">
+              Delete {selectedContracts.length} contract
+              {selectedContracts.length === 1 ? '' : 's'} and {selectedAlertCount} alert
+              {selectedAlertCount === 1 ? '' : 's'}? This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(false)}
+                className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSelected}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
