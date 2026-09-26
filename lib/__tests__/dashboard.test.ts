@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   getContracts,
   saveContract,
@@ -7,6 +7,9 @@ import {
   addAlert,
   getAlerts,
   getNetworkDistribution,
+  bucketAlertsByDay,
+  bucketAlertsByHour,
+  onAlertsChange,
 } from '../storage'
 import { WatchedContract, AlertPayload } from '@/types'
 
@@ -172,5 +175,157 @@ describe('getAlerts — per contract filter', () => {
     expect(getAlerts('CONTRACT_A')).toHaveLength(1)
     expect(getAlerts('CONTRACT_B')).toHaveLength(1)
     expect(getAlerts('CONTRACT_C')).toHaveLength(0)
+  })
+})
+
+// ── Alert activity chart — bucketing helpers ─────────────────────────────────
+
+describe('bucketAlertsByDay — 7-day bucketing', () => {
+  it('returns 7 buckets when no alerts exist', () => {
+    const buckets = bucketAlertsByDay([], 7)
+    expect(buckets).toHaveLength(7)
+    expect(buckets.every((b) => b.count === 0)).toBe(true)
+  })
+
+  it('places an alert from today in the last bucket', () => {
+    const buckets = bucketAlertsByDay([makeAlert({ timestamp: Date.now() })], 7)
+    expect(buckets).toHaveLength(7)
+    expect(buckets[6].count).toBe(1)
+    expect(buckets.slice(0, 6).every((b) => b.count === 0)).toBe(true)
+  })
+
+  it('buckets alerts across multiple days', () => {
+    const day = 24 * 60 * 60 * 1000
+    const alerts = [
+      makeAlert({ transaction_hash: 'a', timestamp: Date.now() }),
+      makeAlert({ transaction_hash: 'b', timestamp: Date.now() - day }),
+      makeAlert({ transaction_hash: 'c', timestamp: Date.now() - day }),
+      makeAlert({ transaction_hash: 'd', timestamp: Date.now() - 3 * day }),
+    ]
+    const buckets = bucketAlertsByDay(alerts, 7)
+    expect(buckets[6].count).toBe(1)
+    expect(buckets[5].count).toBe(2)
+    expect(buckets[3].count).toBe(1)
+  })
+
+  it('ignores alerts older than the window', () => {
+    const day = 24 * 60 * 60 * 1000
+    const alerts = [makeAlert({ timestamp: Date.now() - 30 * day })]
+    const buckets = bucketAlertsByDay(alerts, 7)
+    expect(buckets.reduce((sum, b) => sum + b.count, 0)).toBe(0)
+  })
+
+  it('splits counts by network', () => {
+    const alerts = [
+      makeAlert({ transaction_hash: 'a', network: 'mainnet' }),
+      makeAlert({ transaction_hash: 'b', network: 'testnet' }),
+      makeAlert({ transaction_hash: 'c', network: 'testnet' }),
+    ]
+    const buckets = bucketAlertsByDay(alerts, 7)
+    expect(buckets[6].count).toBe(3)
+    expect(buckets[6].byNetwork.mainnet).toBe(1)
+    expect(buckets[6].byNetwork.testnet).toBe(2)
+  })
+})
+
+describe('bucketAlertsByHour — 24-hour bucketing', () => {
+  it('returns 24 buckets when no alerts exist', () => {
+    const buckets = bucketAlertsByHour([], 24)
+    expect(buckets).toHaveLength(24)
+    expect(buckets.every((b) => b.count === 0)).toBe(true)
+  })
+
+  it('places an alert from the current hour in the last bucket', () => {
+    const buckets = bucketAlertsByHour([makeAlert({ timestamp: Date.now() })], 24)
+    expect(buckets).toHaveLength(24)
+    expect(buckets[23].count).toBe(1)
+  })
+
+  it('buckets alerts across multiple hours', () => {
+    const hour = 60 * 60 * 1000
+    const alerts = [
+      makeAlert({ transaction_hash: 'a', timestamp: Date.now() }),
+      makeAlert({ transaction_hash: 'b', timestamp: Date.now() - 2 * hour }),
+      makeAlert({ transaction_hash: 'c', timestamp: Date.now() - 2 * hour }),
+    ]
+    const buckets = bucketAlertsByHour(alerts, 24)
+    expect(buckets[23].count).toBe(1)
+    expect(buckets[21].count).toBe(2)
+  })
+
+  it('ignores alerts older than the window', () => {
+    const hour = 60 * 60 * 1000
+    const alerts = [makeAlert({ timestamp: Date.now() - 48 * hour })]
+    const buckets = bucketAlertsByHour(alerts, 24)
+    expect(buckets.reduce((sum, b) => sum + b.count, 0)).toBe(0)
+  })
+
+  it('splits counts by network', () => {
+    const alerts = [
+      makeAlert({ transaction_hash: 'a', network: 'mainnet' }),
+      makeAlert({ transaction_hash: 'b', network: 'mainnet' }),
+      makeAlert({ transaction_hash: 'c', network: 'testnet' }),
+    ]
+    const buckets = bucketAlertsByHour(alerts, 24)
+    expect(buckets[23].byNetwork.mainnet).toBe(2)
+    expect(buckets[23].byNetwork.testnet).toBe(1)
+// ── Alerts today — refresh triggers (issue #49) ──────────────────────────────
+
+describe('alerts today — refresh triggers', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('recomputes the count when alerts change via onAlertsChange', () => {
+    let count = getTodayAlertCount()
+    expect(count).toBe(0)
+
+    const unsubscribe = onAlertsChange(() => {
+      count = getTodayAlertCount()
+    })
+
+    addAlert(makeAlert({ transaction_hash: 'tx-new' }))
+    expect(count).toBe(1)
+
+    unsubscribe()
+  })
+
+  it('recomputes the count when the window regains focus', () => {
+    let count = getTodayAlertCount()
+    expect(count).toBe(0)
+
+    const onFocus = () => {
+      count = getTodayAlertCount()
+    }
+    window.addEventListener('focus', onFocus)
+
+    addAlert(makeAlert({ transaction_hash: 'tx-focus' }))
+    window.dispatchEvent(new Event('focus'))
+    expect(count).toBe(1)
+
+    window.removeEventListener('focus', onFocus)
+  })
+
+  it('recomputes the count at local midnight so it rolls over', () => {
+    vi.useFakeTimers()
+    // Start at 23:59:30 local time so midnight is 30s away.
+    const start = new Date(2024, 0, 1, 23, 59, 30, 0)
+    vi.setSystemTime(start)
+
+    addAlert(makeAlert({ transaction_hash: 'tx-today', timestamp: start.getTime() }))
+    let count = getTodayAlertCount()
+    expect(count).toBe(1)
+
+    // Schedule a recompute at the next local midnight.
+    const nextMidnight = new Date(2024, 0, 2, 0, 0, 0, 0)
+    const delay = nextMidnight.getTime() - start.getTime()
+    const timer = setTimeout(() => {
+      count = getTodayAlertCount()
+    }, delay)
+
+    vi.advanceTimersByTime(delay)
+    expect(count).toBe(0)
+
+    clearTimeout(timer)
   })
 })

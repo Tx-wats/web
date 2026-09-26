@@ -68,5 +68,20 @@ describe('RuleBuilder editing index integrity', () => {
     // Editing state should be cleared: no stale "Update Rule" button remains.
     expect(screen.queryByRole('button', { name: /update rule/i })).not.toBeInTheDocument();
     expect(screen.getAllByTestId('rule-item')).toHaveLength(1);
+import { render, screen, fireEvent } from '@testing-library/react';
+import RuleBuilder from '../components/RuleBuilder';
+
+describe('RuleBuilder addRule immutability', () => {
+  it('does not mutate the previous draft object when adding a rule', () => {
+    render(<RuleBuilder />);
+
+    const input = screen.getByPlaceholderText(/function name/i);
+    fireEvent.change(input, { target: { value: 'zeta' } });
+    fireEvent.click(screen.getByRole('button', { name: /add rule/i }));
+
+    const previousDraft = screen.getByTestId('previous-draft');
+    const previousNames = JSON.parse(previousDraft.textContent || '[]');
+
+    expect(previousNames).toEqual([]);
   });
 });
