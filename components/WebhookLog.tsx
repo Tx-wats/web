@@ -122,7 +122,7 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
                     {formatDateTime(alert.timestamp)}
                   </td>
                   <td className="py-3 pr-4">
-                    <AlertRuleBadge type={alert.rule_triggered as AlertRuleType} />
+                    <AlertRuleBadge type={alert.rule_triggered} />
                   </td>
                   <td className="py-3 pr-4">
                     <span className="inline-flex items-center gap-2">
