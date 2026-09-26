@@ -40,4 +40,39 @@ describe('parseImport', () => {
     expect(validateContractEntry({ ...good, rules: [{ type: 'Bogus' }] })).toMatch(/rule type/)
     expect(validateContractEntry({ ...good, webhook_url: 'nope' })).toMatch(/webhook_url/)
   })
+
+  it('rejects invalid admin function names', () => {
+    const r = validateContractEntry({
+      ...good,
+      rules: [{ type: 'AdminFunctionCalled', functions: ['set-admin'] }],
+    })
+    expect(r).toMatch(/set-admin/)
+  })
+
+  it('rejects admin function names over the 32-char symbol limit', () => {
+    const r = validateContractEntry({
+      ...good,
+      rules: [{ type: 'AdminFunctionCalled', functions: ['a'.repeat(33)] }],
+    })
+    expect(r).toMatch(/32/)
+  })
+
+  it('de-duplicates admin function names before saving', () => {
+    const r = parseImport(
+      JSON.stringify({
+        version: 1,
+        contracts: [
+          {
+            ...good,
+            rules: [{ type: 'AdminFunctionCalled', functions: ['upgrade', 'upgrade'] }],
+          },
+        ],
+      }),
+    )
+    expect(r.errors).toEqual([])
+    expect(r.contracts[0].rules[0]).toMatchObject({
+      type: 'AdminFunctionCalled',
+      functions: ['upgrade'],
+    })
+  })
 })

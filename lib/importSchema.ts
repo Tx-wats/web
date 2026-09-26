@@ -1,5 +1,5 @@
 import type { AlertRule, AlertRuleType, Network, WatchedContract } from '@/types'
-import { isValidContractId, isValidUrl } from '@/lib/stellar'
+import { isValidContractId, isValidUrl, isValidFunctionName } from '@/lib/stellar'
 
 /** Export file format, aligned with WatchedContract (uses contract_id, not address). */
 export interface ContractsSnapshot {
@@ -28,6 +28,30 @@ const RULE_TYPES: AlertRuleType[] = [
   'TransactionFailed',
 ]
 
+/** Soroban symbols are limited to 32 characters. */
+const MAX_SYMBOL_LENGTH = 32
+
+/**
+ * Validates and de-duplicates a list of function names.
+ * Returns the cleaned list or an error message naming the offending value.
+ */
+function normalizeFunctionNames(names: string[]): string[] | string {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const name of names) {
+    if (name.length > MAX_SYMBOL_LENGTH) {
+      return `function name "${name}" exceeds ${MAX_SYMBOL_LENGTH} characters`
+    }
+    if (!isValidFunctionName(name)) {
+      return `invalid function name "${name}"`
+    }
+    if (seen.has(name)) continue
+    seen.add(name)
+    result.push(name)
+  }
+  return result
+}
+
 export function buildSnapshot(contracts: WatchedContract[]): ContractsSnapshot {
   return {
     version: 1,
@@ -46,6 +70,11 @@ function validateRule(rule: unknown): string | null {
   }
   if (r.function_names !== undefined && !(Array.isArray(r.function_names) && r.function_names.every((n) => typeof n === 'string'))) {
     return 'function_names must be an array of strings'
+  }
+  if (r.type === 'AdminFunctionCalled' && Array.isArray(r.function_names)) {
+    const normalized = normalizeFunctionNames(r.function_names)
+    if (typeof normalized === 'string') return normalized
+    r.function_names = normalized
   }
   return null
 }
