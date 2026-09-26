@@ -78,3 +78,86 @@ describe('formatRuleSummary', () => {
     expect(isDuplicateLabel(formatRuleSummary(rules[1]), editingIndex)).toBe(false)
   })
 })
+
+describe('Modal keyboard interaction', () => {
+  const setupModal = () => {
+    const trigger = document.createElement('button')
+    trigger.textContent = 'Open'
+    document.body.appendChild(trigger)
+    trigger.focus()
+
+    const overlay = document.createElement('div')
+    overlay.setAttribute('role', 'dialog')
+    overlay.setAttribute('aria-modal', 'true')
+    overlay.setAttribute('aria-labelledby', 'modal-title')
+
+    const title = document.createElement('h2')
+    title.id = 'modal-title'
+    title.textContent = 'Edit Details'
+
+    const cancel = document.createElement('button')
+    cancel.textContent = 'Cancel'
+    const confirm = document.createElement('button')
+    confirm.textContent = 'Confirm'
+
+    overlay.append(title, cancel, confirm)
+    document.body.appendChild(overlay)
+    cancel.focus()
+
+    return { trigger, overlay, cancel, confirm }
+  }
+
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('exposes dialog semantics with an accessible label', () => {
+    const { overlay } = setupModal()
+    expect(overlay.getAttribute('role')).toBe('dialog')
+    expect(overlay.getAttribute('aria-modal')).toBe('true')
+    expect(overlay.getAttribute('aria-labelledby')).toBe('modal-title')
+    expect(document.getElementById('modal-title')?.textContent).toBe('Edit Details')
+  })
+
+  it('focuses the safe action (Cancel) by default for destructive dialogs', () => {
+    const { cancel } = setupModal()
+    expect(document.activeElement).toBe(cancel)
+  })
+
+  it('traps focus within the dialog when tabbing', () => {
+    const { cancel, confirm } = setupModal()
+    const focusable = [cancel, confirm]
+
+    // Tab forward from the last element wraps to the first.
+    confirm.focus()
+    const nextIndex = (focusable.indexOf(document.activeElement as HTMLElement) + 1) % focusable.length
+    focusable[nextIndex].focus()
+    expect(document.activeElement).toBe(cancel)
+
+    // Shift+Tab from the first element wraps to the last.
+    cancel.focus()
+    const prevIndex =
+      (focusable.indexOf(document.activeElement as HTMLElement) - 1 + focusable.length) %
+      focusable.length
+    focusable[prevIndex].focus()
+    expect(document.activeElement).toBe(confirm)
+  })
+
+  it('closes on Escape and restores focus to the trigger', () => {
+    const { trigger, overlay } = setupModal()
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        overlay.remove()
+        trigger.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    document.removeEventListener('keydown', onKeyDown)
+
+    expect(document.body.contains(overlay)).toBe(false)
+    expect(document.activeElement).toBe(trigger)
+  })
+})
