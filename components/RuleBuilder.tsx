@@ -82,6 +82,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
   }
 
   function addRule() {
+    let newRule: AlertRule = { ...draft }
     if (draft.type === 'LargeTransfer') {
       // Only an empty string is treated as undefined; otherwise parse the raw text.
       const parsed = thresholdText.trim() === '' ? undefined : parseFloat(thresholdText)
@@ -93,7 +94,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
         setError('Threshold must be greater than 0')
         return
       }
-      draft.threshold_xlm = parsed
+      newRule = { ...newRule, threshold_xlm: parsed }
     }
     if (draft.type === 'FunctionCalled') {
       if (!draft.function_name?.trim()) {
@@ -111,10 +112,9 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
         setError('Enter at least one function name')
         return
       }
-      // Sort function names for consistency
-      draft.function_names = [...names].sort()
+      // Sort function names for consistency, building a new rule immutably.
+      newRule = { ...newRule, function_names: [...names].sort() }
     }
-    const newRule = { ...draft }
     if (editingIndex !== null) {
       const updated = [...rules]
       updated[editingIndex] = newRule
@@ -223,10 +223,6 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
                 setError(null)
                 setWarning(null)
               }}
-              onBlur={() => {
-                const names = parseFunctionNames(functionNamesText)
-                setDraft((prev) => ({ ...prev, function_names: names }))
-              }}
               className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -239,15 +235,15 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
           <button
             type="button"
             onClick={addRule}
-            className="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+            className="px-3 py-2 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white"
           >
-            {editingIndex !== null ? 'Update Rule' : 'Add Rule'}
+            {editingIndex !== null ? 'Save Rule' : 'Add Rule'}
           </button>
           {editingIndex !== null && (
             <button
               type="button"
               onClick={cancelEdit}
-              className="px-3 py-1.5 text-sm bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-lg transition-colors"
+              className="px-3 py-2 text-sm rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100"
             >
               Cancel
             </button>
@@ -256,35 +252,35 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
       </div>
 
       {rules.length > 0 && (
-        <div className="space-y-2">
-          {rules.map((rule, index) => (
-            <div
-              key={index}
+        <ul className="space-y-2">
+          {rules.map((rule, i) => (
+            <li
+              key={i}
               className="flex items-center justify-between bg-zinc-800/50 border border-zinc-700 rounded-lg px-3 py-2"
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2">
                 <AlertRuleBadge type={rule.type} />
-                <span className="text-sm text-zinc-300 truncate">{formatRuleSummary(rule)}</span>
+                <span className="text-sm text-zinc-300">{formatRuleSummary(rule)}</span>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => startEdit(index)}
-                  className="px-2 py-1 text-xs text-zinc-400 hover:text-zinc-100 transition-colors"
+                  onClick={() => startEdit(i)}
+                  className="text-xs text-indigo-400 hover:text-indigo-300"
                 >
                   Edit
                 </button>
                 <button
                   type="button"
-                  onClick={() => removeRule(index)}
-                  className="px-2 py-1 text-xs text-red-400 hover:text-red-300 transition-colors"
+                  onClick={() => removeRule(i)}
+                  className="text-xs text-red-400 hover:text-red-300"
                 >
                   Remove
                 </button>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   )
