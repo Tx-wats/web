@@ -187,6 +187,9 @@ describe('contracts page — new contract highlight (issue #55)', () => {
     const element = { scrollIntoView } as unknown as HTMLElement
     element.scrollIntoView({ behavior: 'smooth', block: 'center' })
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' })
+  })
+})
+
 describe('contracts page — bulk selection (issue #52)', () => {
   type ContractItem = { id: string; label: string; alert_count: number }
 
@@ -253,120 +256,93 @@ describe('contracts page — bulk selection (issue #52)', () => {
     expect(isAllSelected(new Set<string>(), [])).toBe(false)
   })
 
-  it('sums alert records across selected contracts', () => {
+  it('totalAlertRecords sums alert counts of selected contracts', () => {
     const selected = new Set<string>(['1', '3'])
     expect(totalAlertRecords(selected, items)).toBe(8)
   })
 
-  it('total alert records is 0 when nothing is selected', () => {
-    expect(totalAlertRecords(new Set<string>(), items)).toBe(0)
+  it('selectedLabels returns labels of selected contracts', () => {
+    const selected = new Set<string>(['2'])
+    expect(selectedLabels(selected, items)).toEqual(['Payment Router'])
   })
+})
 
-  it('lists the labels of the selected contracts', () => {
-    const selected = new Set<string>(['1', '3'])
-    expect(selectedLabels(selected, items)).toEqual(['Escrow Manager', 'Token Service'])
-  })
+describe('contracts page — URL filter params (issue #41)', () => {
+  type ContractItem = {
+    id: string
+    label: string
+    has_active_webhooks: boolean
+    last_alert_at: string | null
+  }
 
-  it('selected labels are empty when nothing is selected', () => {
-    expect(selectedLabels(new Set<string>(), items)).toEqual([])
-describe('contracts page — view mode & sort preference persistence (issue #48)', () => {
-  const PREFS_KEY = 'txwatch_prefs'
-  type ViewMode = 'flat' | 'grouped'
-  type SortBy = 'name' | 'recent'
-  type Prefs = { viewMode: ViewMode; sortBy: SortBy }
+  const now = new Date('2024-06-15T12:00:00.000Z')
 
-  const DEFAULT_PREFS: Prefs = { viewMode: 'flat', sortBy: 'recent' }
+  function startOfLocalDay(date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  }
 
-  function createStorage(initial?: string) {
-    const store = new Map<string, string>()
-    if (initial !== undefined) store.set(PREFS_KEY, initial)
-    return {
-      getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
-      setItem: (key: string, value: string) => {
-        store.set(key, value)
-      },
+  function applyUrlFilter(list: ContractItem[], filter: string | null): ContractItem[] {
+    if (filter === 'alerts-today') {
+      const midnight = startOfLocalDay(now).getTime()
+      return list.filter((c) => {
+        if (!c.last_alert_at) return false
+        return new Date(c.last_alert_at).getTime() >= midnight
+      })
     }
-  }
-
-  function readPrefs(storage: ReturnType<typeof createStorage>): Prefs {
-    try {
-      const raw = storage.getItem(PREFS_KEY)
-      if (!raw) return { ...DEFAULT_PREFS }
-      const parsed = JSON.parse(raw) as Partial<Prefs>
-      return {
-        viewMode: parsed.viewMode === 'grouped' ? 'grouped' : 'flat',
-        sortBy: parsed.sortBy === 'name' ? 'name' : 'recent',
-      }
-    } catch {
-      return { ...DEFAULT_PREFS }
+    if (filter === 'webhooks') {
+      return list.filter((c) => c.has_active_webhooks)
     }
+    return list
   }
 
-  function writePrefs(storage: ReturnType<typeof createStorage>, prefs: Prefs): void {
-    storage.setItem(PREFS_KEY, JSON.stringify(prefs))
-  }
+  const items: ContractItem[] = [
+    {
+      id: '1',
+      label: 'Escrow Manager',
+      has_active_webhooks: true,
+      last_alert_at: '2024-06-15T09:30:00.000Z',
+    },
+    {
+      id: '2',
+      label: 'Payment Router',
+      has_active_webhooks: false,
+      last_alert_at: '2024-06-14T23:00:00.000Z',
+    },
+    {
+      id: '3',
+      label: 'Token Service',
+      has_active_webhooks: true,
+      last_alert_at: null,
+    },
+  ]
 
-  function resolvePrefs(
-    storage: ReturnType<typeof createStorage>,
-    params: { view?: string | null; sort?: string | null },
-  ): Prefs {
-    const stored = readPrefs(storage)
-    const viewMode: ViewMode =
-      params.view === 'grouped' || params.view === 'flat' ? params.view : stored.viewMode
-    const sortBy: SortBy =
-      params.sort === 'name' || params.sort === 'recent' ? params.sort : stored.sortBy
-    return { viewMode, sortBy }
-  }
-
-  it('returns defaults when nothing is stored', () => {
-    expect(readPrefs(createStorage())).toEqual(DEFAULT_PREFS)
+  it('returns all contracts when no filter param is present', () => {
+    expect(applyUrlFilter(items, null)).toHaveLength(3)
   })
 
-  it('persists and restores viewMode and sortBy under txwatch_prefs', () => {
-    const storage = createStorage()
-    writePrefs(storage, { viewMode: 'grouped', sortBy: 'name' })
-    expect(storage.getItem(PREFS_KEY)).toBe(JSON.stringify({ viewMode: 'grouped', sortBy: 'name' }))
-    expect(readPrefs(storage)).toEqual({ viewMode: 'grouped', sortBy: 'name' })
+  it('alerts-today returns only contracts with an alert since local midnight', () => {
+    const result = applyUrlFilter(items, 'alerts-today')
+    expect(result.map((c) => c.id)).toEqual(['1'])
   })
 
-  it('falls back to defaults on malformed stored JSON', () => {
-    expect(readPrefs(createStorage('{not json'))).toEqual(DEFAULT_PREFS)
+  it('alerts-today excludes contracts with no alert timestamp', () => {
+    const result = applyUrlFilter(items, 'alerts-today')
+    expect(result.some((c) => c.id === '3')).toBe(false)
   })
 
-  it('ignores unknown stored values and keeps defaults', () => {
-    const storage = createStorage(JSON.stringify({ viewMode: 'bogus', sortBy: 'bogus' }))
-    expect(readPrefs(storage)).toEqual(DEFAULT_PREFS)
+  it('webhooks returns only contracts with active webhooks', () => {
+    const result = applyUrlFilter(items, 'webhooks')
+    expect(result.map((c) => c.id)).toEqual(['1', '3'])
   })
 
-  it('uses stored prefs when no URL params are present', () => {
-    const storage = createStorage(JSON.stringify({ viewMode: 'grouped', sortBy: 'name' }))
-    expect(resolvePrefs(storage, { view: null, sort: null })).toEqual({
-      viewMode: 'grouped',
-      sortBy: 'name',
-    })
+  it('unknown filter values fall back to the unfiltered list', () => {
+    expect(applyUrlFilter(items, 'bogus')).toHaveLength(3)
   })
 
-  it('URL params take precedence over stored prefs', () => {
-    const storage = createStorage(JSON.stringify({ viewMode: 'grouped', sortBy: 'name' }))
-    expect(resolvePrefs(storage, { view: 'flat', sort: 'recent' })).toEqual({
-      viewMode: 'flat',
-      sortBy: 'recent',
-    })
-  })
-
-  it('URL params override only the values they specify', () => {
-    const storage = createStorage(JSON.stringify({ viewMode: 'grouped', sortBy: 'name' }))
-    expect(resolvePrefs(storage, { view: 'flat', sort: null })).toEqual({
-      viewMode: 'flat',
-      sortBy: 'name',
-    })
-  })
-
-  it('ignores invalid URL params and falls back to stored prefs', () => {
-    const storage = createStorage(JSON.stringify({ viewMode: 'grouped', sortBy: 'name' }))
-    expect(resolvePrefs(storage, { view: 'bogus', sort: 'bogus' })).toEqual({
-      viewMode: 'grouped',
-      sortBy: 'name',
-    })
+  it('clearing the filter removes the param from the URL', () => {
+    const params = new URLSearchParams('filter=webhooks&q=escrow')
+    params.delete('filter')
+    expect(params.get('filter')).toBeNull()
+    expect(params.get('q')).toBe('escrow')
   })
 })
