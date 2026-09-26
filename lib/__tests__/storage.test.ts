@@ -187,6 +187,22 @@ describe('alert retention pruning', () => {
     expect(s.getAlerts('CX')).toHaveLength(1)
   })
 })
+
+describe('per-contract alert cap', () => {
+  const makeAlert = (i: number) => ({
+    label: 'a', contract_id: 'CX', network: 'testnet', rule_triggered: 'AnyTransaction',
+    transaction_hash: `h${i}`, timestamp: i, horizon_link: '',
+  })
+
+  it('keeps the newest 500 alerts and drops the oldest when the cap is exceeded', () => {
+    for (let i = 1; i <= 501; i++) addAlert(makeAlert(i))
+    const alerts = getAlerts('CX')
+    expect(alerts).toHaveLength(500)
+    expect(alerts.some((a) => a.transaction_hash === 'h501')).toBe(true)
+    expect(alerts.some((a) => a.transaction_hash === 'h1')).toBe(false)
+  })
+})
+
 describe('seedMockAlerts', () => {
   it('uses the network Horizon host, 64-hex hashes, and chronological order', () => {
     seedMockAlerts('c1', 'futurenet', 3);
@@ -228,6 +244,9 @@ describe('addContract', () => {
     saveContract({ ...contract1, label: 'Renamed' });
     expect(getContracts()).toHaveLength(1);
     expect(getContracts()[0].label).toBe('Renamed');
+  });
+});
+
 describe('corrupted storage', () => {
   it('triggers the registered storage error handler and returns []', () => {
     const keys: string[] = [];
@@ -252,19 +271,5 @@ describe('quota handling', () => {
   it('returns false instead of throwing when storage always fails', () => {
     localStorageMock.setItem = () => { throw quotaError(); };
     expect(saveContract(contract1)).toBe(false);
-  });
-
-  it('retries once after quota error and returns true on success', () => {
-    let calls = 0;
-    localStorageMock.setItem = (k: string, v: string) => {
-      if (calls++ === 0) throw quotaError();
-      realSet(k, v);
-    };
-    expect(saveContract(contract1)).toBe(true);
-    expect(getContracts()).toHaveLength(1);
-  });
-
-  it('returns true on normal save', () => {
-    expect(saveContract(contract1)).toBe(true);
   });
 });

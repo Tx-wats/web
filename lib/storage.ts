@@ -265,8 +265,17 @@ export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: st
   }
   const all = [...load<AlertPayload>(ALERTS_KEY), normalizedAlert]
   const counts: Record<string, number> = {}
-  save(ALERTS_KEY, all.filter((a) => {
-    counts[a.contract_id] = (counts[a.contract_id] ?? 0) + 1
-    return counts[a.contract_id] <= MAX_ALERTS_PER_CONTRACT
-  }))
+  // Iterate newest-first so the most recent MAX_ALERTS_PER_CONTRACT alerts
+  // per contract are retained and the oldest are dropped once the cap is hit.
+  const kept: AlertPayload[] = []
+  for (let i = all.length - 1; i >= 0; i--) {
+    const current = all[i]
+    const contractId = current.contract_id
+    const count = counts[contractId] ?? 0
+    if (count >= MAX_ALERTS_PER_CONTRACT) continue
+    counts[contractId] = count + 1
+    kept.push(current)
+  }
+  kept.reverse()
+  save(ALERTS_KEY, kept)
 }
