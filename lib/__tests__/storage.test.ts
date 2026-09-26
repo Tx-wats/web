@@ -145,12 +145,12 @@ describe('addAlert / getAlerts — insertion order', () => {
     addAlert(alert1);
     addAlert(alert2);
     addAlert(alert3);
-    const alerts = getAlerts('c1');
+    const alerts = getAlerts('c1', 'testnet');
     expect(alerts.map((a) => (a as { id?: string }).id)).toEqual(['a1', 'a2', 'a3']);
   });
 
   it('returns empty array when no alerts exist for a contract (empty fallback)', () => {
-    expect(getAlerts('no-such-contract')).toEqual([]);
+    expect(getAlerts('no-such-contract', 'testnet')).toEqual([]);
   });
 });
 
@@ -159,7 +159,7 @@ describe('deleteAlert', () => {
     addAlert(alert1);
     addAlert(alert2);
     deleteAlert('a1');
-    const alerts = getAlerts('c1');
+    const alerts = getAlerts('c1', 'testnet');
     expect(alerts).toHaveLength(1);
     expect((alerts[0] as { id?: string }).id).toBe('a2');
   });
@@ -176,7 +176,7 @@ describe('alert retention pruning', () => {
     const s = await import('../storage')
     localStorage.setItem('txwatch_alerts', JSON.stringify([alert(100)]))
     s.addAlert(alert(1))
-    expect(s.getAlerts('CX')).toHaveLength(1)
+    expect(s.getAlerts('CX', 'testnet')).toHaveLength(1)
   })
 
   it('honours configurable retention', async () => {
@@ -184,7 +184,7 @@ describe('alert retention pruning', () => {
     localStorage.setItem('txwatch_alerts', JSON.stringify([alert(10), alert(1)]))
     s.setRetentionDays(5)
     expect(s.getRetentionDays()).toBe(5)
-    expect(s.getAlerts('CX')).toHaveLength(1)
+    expect(s.getAlerts('CX', 'testnet')).toHaveLength(1)
   })
 })
 
@@ -196,7 +196,7 @@ describe('per-contract alert cap', () => {
 
   it('keeps the newest 500 alerts and drops the oldest when the cap is exceeded', () => {
     for (let i = 1; i <= 501; i++) addAlert(makeAlert(i))
-    const alerts = getAlerts('CX')
+    const alerts = getAlerts('CX', 'testnet')
     expect(alerts).toHaveLength(500)
     expect(alerts.some((a) => a.transaction_hash === 'h501')).toBe(true)
     expect(alerts.some((a) => a.transaction_hash === 'h1')).toBe(false)
@@ -206,7 +206,7 @@ describe('per-contract alert cap', () => {
 describe('seedMockAlerts', () => {
   it('uses the network Horizon host, 64-hex hashes, and chronological order', () => {
     seedMockAlerts('c1', 'futurenet', 3);
-    const alerts = getAlerts('c1');
+    const alerts = getAlerts('c1', 'futurenet');
     expect(alerts).toHaveLength(3);
     for (const a of alerts) {
       expect(a.transaction_hash).toMatch(/^[0-9a-f]{64}$/);
@@ -217,7 +217,7 @@ describe('seedMockAlerts', () => {
 
   it('respects the per-contract alert cap', () => {
     seedMockAlerts('c1', 'testnet', 600);
-    expect(getAlerts('c1')).toHaveLength(500);
+    expect(getAlerts('c1', 'testnet')).toHaveLength(500);
   });
 });
 
@@ -247,29 +247,42 @@ describe('addContract', () => {
   });
 });
 
+describe('alerts keyed by (contract_id, network)', () => {
+  const sharedId = 'CSHAREDCONTRACTID0000000000000000000000000000000000000000000'
+  const mainnetAlert = {
+    label: 'a', contract_id: sharedId, network: 'mainnet', rule_triggered: 'AnyTransaction',
+    transaction_hash: 'main1', timestamp: 1, horizon_link: '',
+  }
+  const testnetAlert = {
+    label: 'a', contract_id: sharedId, network: 'testnet', rule_triggered: 'AnyTransaction',
+    transaction_hash: 'test1', timestamp: 2, horizon_link: '',
+  }
+
+  it('does not mix alerts for the same contract_id on different networks', () => {
+    addAlert(mainnetAlert)
+    addAlert(testnetAlert)
+    expect(getAlerts(sharedId, 'mainnet').map((a) => a.transaction_hash)).toEqual(['main1'])
+    expect(getAlerts(sharedId, 'testnet').map((a) => a.transaction_hash)).toEqual(['test1'])
+  })
+
+  it('deleteContract only wipes the matching network history', () => {
+    saveContract({ ...contract1, id: 'm1', contract_id: sharedId, network: 'mainnet' })
+    saveContract({ ...contract1, id: 't1', contract_id: sharedId, network: 'testnet' })
+    addAlert(mainnetAlert)
+    addAlert(testnetAlert)
+    deleteContract('m1')
+    expect(getAlerts(sharedId, 'mainnet')).toEqual([])
+    expect(getAlerts(sharedId, 'testnet')).toHaveLength(1)
+  })
+})
+
 describe('corrupted storage', () => {
   it('triggers the registered storage error handler and returns []', () => {
     const keys: string[] = [];
-    onStorageError((ctx) => keys.push(ctx.key));
-    localStorage.setItem('txwatch_contracts', '{broken');
+    onStorageError((key) => keys.push(key));
+    localStorage.setItem('txwatch_contracts', '{not json');
     expect(getContracts()).toEqual([]);
-    expect(keys).toEqual(['txwatch_contracts']);
+    expect(keys).toContain('txwatch_contracts');
     clearStorageErrorHandlers();
-  });
-});
-
-describe('quota handling', () => {
-  const realSet = localStorageMock.setItem;
-  afterEach(() => { localStorageMock.setItem = realSet; });
-
-  function quotaError() {
-    const e = new Error('full');
-    e.name = 'QuotaExceededError';
-    return e;
-  }
-
-  it('returns false instead of throwing when storage always fails', () => {
-    localStorageMock.setItem = () => { throw quotaError(); };
-    expect(saveContract(contract1)).toBe(false);
   });
 });

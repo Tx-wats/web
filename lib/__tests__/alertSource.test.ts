@@ -54,6 +54,17 @@ describe('syncAlerts', () => {
     expect(addAlert).toHaveBeenCalledTimes(1)
     expect(vi.mocked(apiFetch).mock.calls[0][0]).toContain('since=10')
   })
+
+  it('scopes local history to the matching network', async () => {
+    vi.mocked(getAlerts).mockReturnValue([
+      mk('a', 'AnyTransaction', 10),
+      { ...mk('m', 'AnyTransaction', 30), network: 'mainnet' },
+    ])
+    vi.mocked(apiFetch).mockResolvedValue([])
+    await syncAlerts('C1', 'testnet')
+    expect(getAlerts).toHaveBeenCalledWith('C1', 'testnet')
+    expect(vi.mocked(apiFetch).mock.calls[0][0]).toContain('since=10')
+  })
 })
 
 describe('startAlertPolling', () => {
@@ -94,5 +105,20 @@ describe('alert identity', () => {
     const alerts = [mk('a'), { ...mk('b'), contract_id: 'C2' }]
     const remaining = alerts.filter((x) => x.contract_id !== 'C1')
     expect(remaining.map((x) => x.contract_id)).toEqual(['C2'])
+  })
+
+  it('keeps the same contract id on another network intact', () => {
+    const alerts = [
+      mk('a'),
+      { ...mk('m'), network: 'mainnet' },
+      { ...mk('b'), contract_id: 'C2' },
+    ]
+    const remaining = alerts.filter(
+      (x) => !(x.contract_id === 'C1' && x.network === 'testnet')
+    )
+    expect(remaining.map((x) => `${x.contract_id}/${x.network}`)).toEqual([
+      'C1/mainnet',
+      'C2/testnet',
+    ])
   })
 })
