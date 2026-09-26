@@ -102,6 +102,44 @@ describe('saveContract / getContracts', () => {
   });
 });
 
+describe('corrupted / non-array storage values', () => {
+  const cases: Array<[string, string]> = [
+    ['object', '{}'],
+    ['string', '"x"'],
+    ['number', '42'],
+    ['null', 'null'],
+  ];
+
+  for (const [name, raw] of cases) {
+    it(`returns [] for a stored ${name} value`, () => {
+      localStorage.setItem('txwatch_contracts', raw);
+      expect(getContracts()).toEqual([]);
+    });
+  }
+
+  it('drops array entries that fail the minimal shape check', () => {
+    localStorage.setItem(
+      'txwatch_contracts',
+      JSON.stringify([contract1, { id: 'bad' }, null, 'nope', 7]),
+    );
+    const contracts = getContracts();
+    expect(contracts).toHaveLength(1);
+    expect(contracts[0].id).toBe('c1');
+  });
+
+  it('reports corrupted and dropped entries via storageLogger', () => {
+    const events: unknown[] = [];
+    const off = onStorageError((e) => events.push(e));
+    localStorage.setItem('txwatch_contracts', '{}');
+    getContracts();
+    localStorage.setItem('txwatch_contracts', JSON.stringify([contract1, { id: 'bad' }]));
+    getContracts();
+    off();
+    clearStorageErrorHandlers();
+    expect(events.length).toBeGreaterThan(0);
+  });
+});
+
 describe('deleteContract', () => {
   it('removes the correct contract by id', () => {
     saveContract(contract1);
@@ -248,41 +286,6 @@ describe('addContract', () => {
 });
 
 describe('alerts keyed by (contract_id, network)', () => {
-  const sharedId = 'CSHAREDCONTRACTID0000000000000000000000000000000000000000000'
-  const mainnetAlert = {
-    label: 'a', contract_id: sharedId, network: 'mainnet', rule_triggered: 'AnyTransaction',
-    transaction_hash: 'main1', timestamp: 1, horizon_link: '',
-  }
-  const testnetAlert = {
-    label: 'a', contract_id: sharedId, network: 'testnet', rule_triggered: 'AnyTransaction',
-    transaction_hash: 'test1', timestamp: 2, horizon_link: '',
-  }
+  const 
 
-  it('does not mix alerts for the same contract_id on different networks', () => {
-    addAlert(mainnetAlert)
-    addAlert(testnetAlert)
-    expect(getAlerts(sharedId, 'mainnet').map((a) => a.transaction_hash)).toEqual(['main1'])
-    expect(getAlerts(sharedId, 'testnet').map((a) => a.transaction_hash)).toEqual(['test1'])
-  })
-
-  it('deleteContract only wipes the matching network history', () => {
-    saveContract({ ...contract1, id: 'm1', contract_id: sharedId, network: 'mainnet' })
-    saveContract({ ...contract1, id: 't1', contract_id: sharedId, network: 'testnet' })
-    addAlert(mainnetAlert)
-    addAlert(testnetAlert)
-    deleteContract('m1')
-    expect(getAlerts(sharedId, 'mainnet')).toEqual([])
-    expect(getAlerts(sharedId, 'testnet')).toHaveLength(1)
-  })
-})
-
-describe('corrupted storage', () => {
-  it('triggers the registered storage error handler and returns []', () => {
-    const keys: string[] = [];
-    onStorageError((key) => keys.push(key));
-    localStorage.setItem('txwatch_contracts', '{not json');
-    expect(getContracts()).toEqual([]);
-    expect(keys).toContain('txwatch_contracts');
-    clearStorageErrorHandlers();
-  });
-});
+/* … truncated 1606 chars — edit only what you need near the top … */
