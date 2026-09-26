@@ -14,6 +14,23 @@ const RULE_TYPES: AlertRuleType[] = [
   'TransactionFailed',
 ]
 
+/** XLM supports at most 7 decimal places (stroops). */
+const MAX_XLM_DECIMALS = 7
+/** Total XLM supply — a reasonable upper bound for a transfer threshold. */
+const MAX_XLM_THRESHOLD = 50_000_000_000
+
+/** Returns true when the value has no more than 7 decimal places. */
+function hasValidPrecision(value: number): boolean {
+  if (!isFinite(value)) return false
+  const decimals = (String(value).split('.')[1] ?? '').length
+  return decimals <= MAX_XLM_DECIMALS
+}
+
+/** Formats a number with thousands separators, preserving up to 7 decimals. */
+function formatXlm(value: number): string {
+  return value.toLocaleString('en-US', { maximumFractionDigits: MAX_XLM_DECIMALS })
+}
+
 interface RuleBuilderProps {
   rules: AlertRule[]
   onChange: (rules: AlertRule[]) => void
@@ -70,6 +87,14 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
       }
       if (draft.threshold_xlm <= 0) {
         setError('Threshold must be greater than 0')
+        return
+      }
+      if (!hasValidPrecision(draft.threshold_xlm)) {
+        setError('Threshold supports at most 7 decimal places')
+        return
+      }
+      if (draft.threshold_xlm > MAX_XLM_THRESHOLD) {
+        setError(`Threshold cannot exceed ${formatXlm(MAX_XLM_THRESHOLD)} XLM`)
         return
       }
     }
@@ -162,6 +187,11 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
               onChange={(e) => updateDraft({ threshold_xlm: parseFloat(e.target.value) || undefined })}
               className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
             />
+            {draft.threshold_xlm !== undefined && draft.threshold_xlm !== null && !isNaN(draft.threshold_xlm) && (
+              <p className="text-xs text-zinc-500 mt-1">
+                Threshold: {formatXlm(draft.threshold_xlm)} XLM
+              </p>
+            )}
           </div>
         )}
 
@@ -218,7 +248,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
             <button
               type="button"
               onClick={cancelEdit}
-              className="px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-sm font-medium text-zinc-200 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-sm font-medium text-zinc-100 transition-colors"
             >
               Cancel
             </button>
