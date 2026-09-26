@@ -31,11 +31,20 @@ interface RuleBuilderProps {
 
 const emptyRule = (): AlertRule => ({ type: 'AnyTransaction' })
 
+function parseFunctionNames(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
 export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBuilderProps) {
   const [draft, setDraft] = useState<AlertRule>(emptyRule())
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
+  // Raw text for the AdminFunctionCalled input so commas are not eaten while typing.
+  const [functionNamesText, setFunctionNamesText] = useState('')
 
   function updateDraft(patch: Partial<AlertRule>) {
     setDraft((prev) => ({ ...prev, ...patch }))
@@ -45,6 +54,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
 
   function handleTypeChange(type: AlertRuleType) {
     setDraft({ type })
+    setFunctionNamesText('')
     setError(null)
     setWarning(null)
   }
@@ -89,12 +99,13 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
       }
     }
     if (draft.type === 'AdminFunctionCalled') {
-      if (!draft.function_names?.length) {
+      const names = parseFunctionNames(functionNamesText)
+      if (!names.length) {
         setError('Enter at least one function name')
         return
       }
       // Sort function names for consistency
-      draft.function_names = [...draft.function_names].sort()
+      draft.function_names = [...names].sort()
     }
     const newRule = { ...draft }
     if (editingIndex !== null) {
@@ -113,18 +124,22 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
       onRulesChanged?.(updated, 'add')
     }
     setDraft(emptyRule())
+    setFunctionNamesText('')
     setError(null)
     setWarning(null)
   }
 
   function startEdit(index: number) {
-    setDraft(rules[index])
+    const rule = rules[index]
+    setDraft(rule)
+    setFunctionNamesText(rule.function_names?.join(', ') ?? '')
     setEditingIndex(index)
     setError(null)
   }
 
   function cancelEdit() {
     setDraft(emptyRule())
+    setFunctionNamesText('')
     setEditingIndex(null)
     setError(null)
   }
@@ -188,15 +203,16 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
             <input
               type="text"
               placeholder="e.g. set_admin, upgrade, migrate"
-              value={draft.function_names?.join(', ') ?? ''}
-              onChange={(e) =>
-                updateDraft({
-                  function_names: e.target.value
-                    .split(',')
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
+              value={functionNamesText}
+              onChange={(e) => {
+                setFunctionNamesText(e.target.value)
+                setError(null)
+                setWarning(null)
+              }}
+              onBlur={() => {
+                const names = parseFunctionNames(functionNamesText)
+                setDraft((prev) => ({ ...prev, function_names: names }))
+              }}
               className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -220,7 +236,7 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
             <button
               type="button"
               onClick={cancelEdit}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-sm font-medium text-white transition-colors"
+              className="px-3 py-1.5 rounded-lg border border-zinc-700 text-sm font-medium text-zinc-300 hover:bg-zinc-700/50 transition-colors"
             >
               Cancel
             </button>
@@ -230,19 +246,20 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
 
       {rules.length > 0 && (
         <ul className="space-y-2">
-          {rules.map((rule, i) => (
-            <li key={i} className={`flex items-center justify-between rounded-lg px-3 py-2 border ${editingIndex === i ? 'bg-indigo-900/30 border-indigo-600' : 'bg-zinc-900 border-zinc-800'}`}>
-              <div className="flex items-center gap-2 flex-wrap">
+          {rules.map((rule, index) => (
+            <li
+              key={index}
+              className="flex items-center justify-between gap-3 bg-zinc-800/50 border border-zinc-700 rounded-lg px-3 py-2"
+            >
+              <div className="flex items-center gap-2 min-w-0">
                 <AlertRuleBadge type={rule.type} />
-                {formatRuleSummary(rule) && (
-                  <span className="text-xs font-mono text-zinc-400">{formatRuleSummary(rule)}</span>
-                )}
+                <span className="text-sm text-zinc-300 truncate">{formatRuleSummary(rule)}</span>
               </div>
-              <div className="flex gap-1 ml-2">
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
-                  onClick={() => startEdit(i)}
-                  className="text-zinc-600 hover:text-indigo-400 transition-colors"
+                  onClick={() => startEdit(index)}
+                  className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700/50 transition-colors"
                   aria-label="Edit rule"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -251,12 +268,12 @@ export default function RuleBuilder({ rules, onChange, onRulesChanged }: RuleBui
                 </button>
                 <button
                   type="button"
-                  onClick={() => removeRule(i)}
-                  className="text-zinc-600 hover:text-red-400 transition-colors"
+                  onClick={() => removeRule(index)}
+                  className="p-1.5 rounded-md text-zinc-400 hover:text-red-400 hover:bg-zinc-700/50 transition-colors"
                   aria-label="Remove rule"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 </button>
               </div>
