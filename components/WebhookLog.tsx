@@ -7,6 +7,7 @@ import EmptyState from './EmptyState'
 import { truncateId } from '@/lib/stellar'
 import CopyButton from '@/components/CopyButton'
 import { formatDateTime } from '@/lib/format'
+import { formatAmount } from '@/lib/formatAmount'
 import { useState } from 'react'
 import AlertRuleBadge from './AlertRuleBadge'
 import Modal from './Modal'
@@ -157,7 +158,7 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
                     {alert.function_name ?? 'N/A'}
                   </td>
                   <td className="py-3 text-zinc-400">
-                    {alert.amount !== undefined ? `${alert.amount} XLM` : 'N/A'}
+                    {alert.amount !== undefined ? `${formatAmount(alert.amount)} XLM` : 'N/A'}
                   </td>
                 </tr>
               ))}

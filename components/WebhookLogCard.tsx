@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useState } from 'react';
+import { formatAmount } from '@/lib/formatAmount';
 
 export interface WebhookEntry {
   id: string;
@@ -128,7 +129,7 @@ export function WebhookLogCard({ entry }: WebhookLogCardProps) {
           <div className="text-xs">
             <span className="text-muted-foreground">Amount: </span>
             <span className="font-medium text-foreground">
-              {entry.amount} {entry.asset ?? ''}
+              {formatAmount(entry.amount)} {entry.asset ?? ''}
             </span>
           </div>
         )}
