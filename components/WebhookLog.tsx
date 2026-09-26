@@ -11,6 +11,7 @@ import { formatAmount } from '@/lib/formatAmount'
 import { useState } from 'react'
 import AlertRuleBadge from './AlertRuleBadge'
 import Modal from './Modal'
+import WebhookLogCard from './WebhookLogCard'
 
 interface WebhookLogProps {
   alerts: AlertPayload[]
@@ -108,62 +109,76 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
         {filteredAlerts.length === 0 ? (
           <p className="text-sm text-zinc-500 py-4">No alerts match the selected filter.</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800 text-left">
-                <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Time</th>
-                <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Rule</th>
-                <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Tx Hash</th>
-                <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Function</th>
-                <th className="pb-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800/50">
+          <>
+            {/* Mobile card layout */}
+            <div className="space-y-3 md:hidden">
               {filteredAlerts.map((alert, i) => (
-                <tr
+                <WebhookLogCard
                   key={i}
+                  alert={alert}
+                  network={network}
                   onClick={() => setSelectedAlert(alert)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      setSelectedAlert(alert)
-                    }
-                  }}
-                  tabIndex={0}
-                  role="button"
-                  aria-label="View alert details"
-                  className="hover:bg-zinc-800/30 transition-colors cursor-pointer focus:outline-none focus:bg-zinc-800/50"
-                >
-                  <td className="py-3 pr-4 text-zinc-400 whitespace-nowrap">
-                    {formatDateTime(alert.timestamp)}
-                  </td>
-                  <td className="py-3 pr-4">
-                    <AlertRuleBadge type={alert.rule_triggered as AlertRuleType} />
-                  </td>
-                  <td className="py-3 pr-4">
-                    <span className="inline-flex items-center gap-2">
-                      <a
-                        href={explorerTxUrl(network, alert.transaction_hash)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
-                      >
-                        {truncateId(alert.transaction_hash)}
-                      </a>
-                      <CopyButton text={alert.transaction_hash} />
-                    </span>
-                  </td>
-                  <td className="py-3 pr-4 font-mono text-zinc-400">
-                    {alert.function_name ?? 'N/A'}
-                  </td>
-                  <td className="py-3 text-zinc-400">
-                    {alert.amount !== undefined ? `${formatAmount(alert.amount)} XLM` : 'N/A'}
-                  </td>
-                </tr>
+                />
               ))}
-            </tbody>
-          </table>
+            </div>
+            {/* Desktop table layout */}
+            <table className="hidden md:table w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800 text-left">
+                  <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Time</th>
+                  <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Rule</th>
+                  <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Tx Hash</th>
+                  <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Function</th>
+                  <th className="pb-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/50">
+                {filteredAlerts.map((alert, i) => (
+                  <tr
+                    key={i}
+                    onClick={() => setSelectedAlert(alert)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedAlert(alert)
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label="View alert details"
+                    className="hover:bg-zinc-800/30 transition-colors cursor-pointer focus:outline-none focus:bg-zinc-800/50"
+                  >
+                    <td className="py-3 pr-4 text-zinc-400 whitespace-nowrap">
+                      {formatDateTime(alert.timestamp)}
+                    </td>
+                    <td className="py-3 pr-4">
+                      <AlertRuleBadge type={alert.rule_triggered as AlertRuleType} />
+                    </td>
+                    <td className="py-3 pr-4">
+                      <span className="inline-flex items-center gap-2">
+                        <a
+                          href={explorerTxUrl(network, alert.transaction_hash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
+                        >
+                          {truncateId(alert.transaction_hash)}
+                        </a>
+                        <CopyButton text={alert.transaction_hash} />
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 font-mono text-zinc-400">
+                      {alert.function_name ?? 'N/A'}
+                    </td>
+                    <td className="py-3 text-zinc-400">
+                      {alert.amount !== undefined ? `${formatAmount(alert.amount)} XLM` : 'N/A'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
 

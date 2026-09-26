@@ -2,6 +2,8 @@
 
 import React, { useCallback, useState } from 'react';
 import { formatAmount } from '@/lib/formatAmount';
+import { truncateId } from '@/lib/format';
+import { explorerTxUrl } from '@/lib/explorer';
 
 export interface WebhookEntry {
   id: string;
@@ -17,6 +19,7 @@ export interface WebhookEntry {
 
 interface WebhookLogCardProps {
   entry: WebhookEntry;
+  network?: string;
 }
 
 const STATUS_STYLES: Record<WebhookEntry['status'], string> = {
@@ -36,11 +39,6 @@ function formatTimestamp(ts: string): string {
   }
 }
 
-function truncateHash(hash: string, chars = 8): string {
-  if (hash.length <= chars * 2 + 3) return hash;
-  return `${hash.slice(0, chars)}…${hash.slice(-chars)}`;
-}
-
 function buildPayload(entry: WebhookEntry): Record<string, unknown> {
   if (entry.payload) return entry.payload;
   return {
@@ -55,7 +53,7 @@ function buildPayload(entry: WebhookEntry): Record<string, unknown> {
   };
 }
 
-export function WebhookLogCard({ entry }: WebhookLogCardProps) {
+export function WebhookLogCard({ entry, network }: WebhookLogCardProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -86,10 +84,10 @@ export function WebhookLogCard({ entry }: WebhookLogCardProps) {
   }, [json]);
 
   const explorerHref = entry.txHash
-    ? `https://stellar.expert/explorer/public/tx/${entry.txHash}`
+    ? explorerTxUrl(entry.txHash, network)
     : entry.contractAddress
-      ? `https://stellar.expert/explorer/public/contract/${entry.contractAddress}`
-      : 'https://stellar.expert/explorer/public';
+      ? `https://stellar.expert/explorer/${network ?? 'public'}/contract/${entry.contractAddress}`
+      : `https://stellar.expert/explorer/${network ?? 'public'}`;
 
   return (
     <>
@@ -120,7 +118,7 @@ export function WebhookLogCard({ entry }: WebhookLogCardProps) {
           <div className="text-xs">
             <span className="text-muted-foreground">Contract: </span>
             <span className="font-mono break-all text-foreground">
-              {truncateHash(entry.contractAddress, 6)}
+              {truncateId(entry.contractAddress, 6)}
             </span>
           </div>
         )}
@@ -138,14 +136,14 @@ export function WebhookLogCard({ entry }: WebhookLogCardProps) {
           <div className="text-xs">
             <span className="text-muted-foreground">Tx: </span>
             <a
-              href={`https://stellar.expert/explorer/public/tx/${entry.txHash}`}
+              href={explorerTxUrl(entry.txHash, network)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
               className="font-mono text-primary hover:underline break-all"
               aria-label={`View transaction ${entry.txHash} on Stellar Explorer`}
             >
-              {truncateHash(entry.txHash)}
+              {truncateId(entry.txHash)}
             </a>
           </div>
         )}
