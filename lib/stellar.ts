@@ -89,3 +89,38 @@ export function isValidUrl(url: string): boolean {
     return false
   }
 }
+
+/** #117: Validate webhook URLs with security checks. Returns error/warning code or null if valid. */
+export function validateWebhookUrl(url: string, network: Network): string | null {
+  if (!isValidUrl(url)) return 'invalid_url'
+
+  try {
+    const u = new URL(url)
+
+    // Reject URLs with embedded credentials
+    if (u.username || u.password) return 'credentials_in_url'
+
+    // Warn on plain http (block for mainnet)
+    if (u.protocol === 'http:') return network === 'mainnet' ? 'http_on_mainnet' : 'http_warning'
+
+    // Reject localhost and private IP ranges
+    const hostname = u.hostname || ''
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') {
+      return 'loopback_not_allowed'
+    }
+
+    // Reject private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fe80::/10)
+    if (/^(10|172\.(1[6-9]|2[0-9]|3[01])|192\.168)\./.test(hostname) ||
+        hostname.startsWith('fc') || hostname.startsWith('fd') ||
+        hostname.startsWith('fe80')) {
+      return 'private_ip_not_allowed'
+    }
+
+    // Reject link-local addresses (169.254.0.0/16, fe80::/10)
+    if (/^169\.254\./.test(hostname)) return 'link_local_not_allowed'
+
+    return null
+  } catch {
+    return 'invalid_url'
+  }
+}
