@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isValidUrl } from '../stellar'
+import { isValidUrl, validateWebhookUrl } from '../stellar'
 
 describe('isValidUrl', () => {
   it('accepts a valid http URL', () => {
@@ -41,5 +41,48 @@ describe('isValidUrl', () => {
   it('accepts a URL with surrounding whitespace (URL constructor trims automatically)', () => {
     // The URL constructor strips surrounding whitespace, so these are treated as valid
     expect(isValidUrl('  https://example.com  ')).toBe(true)
+  })
+})
+
+// #117: Webhook URL validation tests
+describe('validateWebhookUrl', () => {
+  it('accepts a valid https URL', () => {
+    expect(validateWebhookUrl('https://api.example.com/webhook', 'mainnet')).toBe(null)
+  })
+
+  it('rejects URLs with embedded credentials', () => {
+    expect(validateWebhookUrl('https://user:pass@example.com/webhook', 'mainnet')).toBe('credentials_in_url')
+  })
+
+  it('blocks plain http on mainnet', () => {
+    expect(validateWebhookUrl('http://example.com/webhook', 'mainnet')).toBe('http_on_mainnet')
+  })
+
+  it('warns on plain http for testnet', () => {
+    expect(validateWebhookUrl('http://example.com/webhook', 'testnet')).toBe('http_warning')
+  })
+
+  it('rejects localhost addresses', () => {
+    expect(validateWebhookUrl('http://localhost:8000/webhook', 'testnet')).toBe('loopback_not_allowed')
+  })
+
+  it('rejects 127.0.0.1', () => {
+    expect(validateWebhookUrl('http://127.0.0.1:8000/webhook', 'testnet')).toBe('loopback_not_allowed')
+  })
+
+  it('rejects private IP range 10.x.x.x', () => {
+    expect(validateWebhookUrl('http://10.0.0.1/webhook', 'testnet')).toBe('private_ip_not_allowed')
+  })
+
+  it('rejects private IP range 192.168.x.x', () => {
+    expect(validateWebhookUrl('http://192.168.1.1/webhook', 'testnet')).toBe('private_ip_not_allowed')
+  })
+
+  it('rejects link-local 169.254.x.x', () => {
+    expect(validateWebhookUrl('http://169.254.1.1/webhook', 'testnet')).toBe('link_local_not_allowed')
+  })
+
+  it('rejects invalid URLs', () => {
+    expect(validateWebhookUrl('not a url', 'mainnet')).toBe('invalid_url')
   })
 })
