@@ -96,5 +96,76 @@ describe('ContractDetail last modified', () => {
   it('hides the last modified row when updated_at equals created_at', () => {
     const created = '2024-01-01T00:00:00.000Z'
     expect(renderLastModified(created, created)).toBeNull()
+describe('metadata edit discard confirmation', () => {
+  // Mirrors the in-app dialog flow that replaced window.confirm in
+  // handleCancelMetadataEdit: the dialog resolves to a boolean and the
+  // caller decides whether to discard or keep editing.
+  const createDiscardController = () => {
+    let resolveDialog: ((confirmed: boolean) => void) | null = null
+    let dialogOpen = false
+    let metadataDirty = true
+    let modalOpen = true
+
+    const requestDiscard = () => {
+      dialogOpen = true
+      return new Promise<boolean>((resolve) => {
+        resolveDialog = resolve
+      })
+    }
+
+    const handleCancelMetadataEdit = async () => {
+      if (!metadataDirty) {
+        modalOpen = false
+        return
+      }
+      const confirmed = await requestDiscard()
+      if (confirmed) {
+        metadataDirty = false
+        modalOpen = false
+      }
+    }
+
+    return {
+      handleCancelMetadataEdit,
+      confirm: (value: boolean) => {
+        dialogOpen = false
+        resolveDialog?.(value)
+      },
+      get dialogOpen() {
+        return dialogOpen
+      },
+      get modalOpen() {
+        return modalOpen
+      },
+      get metadataDirty() {
+        return metadataDirty
+      },
+    }
+  }
+
+  it('discards metadata changes when the user confirms', async () => {
+    const controller = createDiscardController()
+
+    const pending = controller.handleCancelMetadataEdit()
+    expect(controller.dialogOpen).toBe(true)
+
+    controller.confirm(true)
+    await pending
+
+    expect(controller.metadataDirty).toBe(false)
+    expect(controller.modalOpen).toBe(false)
+  })
+
+  it('keeps editing when the user cancels the dialog', async () => {
+    const controller = createDiscardController()
+
+    const pending = controller.handleCancelMetadataEdit()
+    expect(controller.dialogOpen).toBe(true)
+
+    controller.confirm(false)
+    await pending
+
+    expect(controller.metadataDirty).toBe(true)
+    expect(controller.modalOpen).toBe(true)
   })
 })
