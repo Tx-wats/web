@@ -6,6 +6,12 @@ import { Network } from '@/types'
 import EmptyState from './EmptyState'
 import { truncateId } from '@/lib/stellar'
 import CopyButton from '@/components/CopyButton'
+import { formatDateTime, formatRelativeTime } from '@/lib/format'
+import { formatAmount } from '@/lib/formatAmount'
+import { useEffect, useState } from 'react'
+import AlertRuleBadge from './AlertRuleBadge'
+import Modal from './Modal'
+import WebhookLogCard from './WebhookLogCard'
 import { formatDateTime } from '@/lib/format'
 import { useEffect, useMemo, useState } from 'react'
 import AlertRuleBadge from './AlertRuleBadge'
@@ -71,6 +77,14 @@ function exportCSV(alerts: AlertPayload[]) {
 
 export default function WebhookLog({ alerts, network }: WebhookLogProps) {
   const [selectedFilter, setSelectedFilter] = useState<AlertRuleType | null>(null)
+  const [selectedAlert, setSelectedAlert] = useState<AlertPayload | null>(null)
+  const [, setNow] = useState(() => Date.now())
+
+  // Refresh relative time labels every minute
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(interval)
+  }, [])
   const [search, setSearch] = useState('')
   const [range, setRange] = useState<DateRange>('all')
   const [customFrom, setCustomFrom] = useState('')
@@ -229,6 +243,16 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
         {filteredAlerts.length === 0 ? (
           <p className="text-sm text-zinc-500 py-4">No alerts match the selected filters.</p>
         ) : (
+          <>
+            {/* Mobile card layout */}
+            <div className="space-y-3 md:hidden">
+              {filteredAlerts.map((alert, i) => (
+                <WebhookLogCard
+                  key={i}
+                  alert={alert}
+                  network={network}
+                  onClick={() => setSelectedAlert(alert)}
+                />
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-800 text-left">
@@ -279,8 +303,70 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
                   </td>
                 </tr>
               ))}
-            </tbody>
-          </table>
+            </div>
+            {/* Desktop table layout */}
+            <table className="hidden md:table w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800 text-left">
+                  <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Time</th>
+                  <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Rule</th>
+                  <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Tx Hash</th>
+                  <th className="pb-3 pr-4 text-xs font-medium text-zinc-500 uppercase tracking-wider">Function</th>
+                  <th className="pb-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/50">
+                {filteredAlerts.map((alert, i) => (
+                  <tr
+                    key={i}
+                    onClick={() => setSelectedAlert(alert)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedAlert(alert)
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    aria-label="View alert details"
+                    className="hover:bg-zinc-800/30 transition-colors cursor-pointer focus:outline-none focus:bg-zinc-800/50"
+                  >
+                    <td className="py-3 pr-4 text-zinc-400 whitespace-nowrap">
+                      <time
+                        dateTime={new Date(alert.timestamp).toISOString()}
+                        title={formatDateTime(alert.timestamp)}
+                      >
+                        {formatRelativeTime(alert.timestamp)}
+                      </time>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <AlertRuleBadge type={alert.rule_triggered as AlertRuleType} />
+                    </td>
+                    <td className="py-3 pr-4">
+                      <span className="inline-flex items-center gap-2">
+                        <a
+                          href={explorerTxUrl(network, alert.transaction_hash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
+                        >
+                          {truncateId(alert.transaction_hash)}
+                        </a>
+                        <CopyButton text={alert.transaction_hash} />
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 font-mono text-zinc-400">
+                      {alert.function_name ?? 'N/A'}
+                    </td>
+                    <td className="py-3 text-zinc-400">
+                      {alert.amount !== undefined ? `${formatAmount(alert.amount)} XLM` : 'N/A'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
         {filteredAlerts.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-2 pt-3 text-xs text-zinc-500">
@@ -325,6 +411,32 @@ export default function WebhookLog({ alerts, network }: WebhookLogProps) {
           </div>
         )}
       </div>
+
+      {/* Alert Detail Drawer */}
+      <Modal
+        isOpen={selectedAlert !== null}
+        onClose={() => setSelectedAlert(null)}
+        title="Alert Details"
+      >
+        {selectedAlert && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <CopyButton text={JSON.stringify(selectedAlert, null, 2)} label="Copy JSON" />
+              <a
+                href={explorerTxUrl(network, selectedAlert.transaction_hash)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-zinc-700 text-zinc-300 hover:text-zinc-100 transition-colors"
+              >
+                Open in explorer
+              </a>
+            </div>
+            <pre className="overflow-x-auto rounded-lg bg-zinc-900 border border-zinc-800 p-4 text-xs text-zinc-300">
+              {JSON.stringify(selectedAlert, null, 2)}
+            </pre>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

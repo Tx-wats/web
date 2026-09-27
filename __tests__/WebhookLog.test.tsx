@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import WebhookLog from '@/components/WebhookLog'
 import { AlertPayload } from '@/types'
 
@@ -100,5 +100,34 @@ describe('WebhookLog', () => {
     render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
     const copyBtn = screen.getByTitle('Copy to clipboard')
     expect(copyBtn).toBeInTheDocument()
+  })
+
+  it('opens the alert detail drawer when a row is clicked', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    fireEvent.click(screen.getByText('Large Transfer'))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText(/Test Contract/)).toBeInTheDocument()
+  })
+
+  it('shows the full payload JSON in the drawer', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    fireEvent.click(screen.getByText('Large Transfer'))
+    expect(screen.getByText(/horizon_link/)).toBeInTheDocument()
+    expect(screen.getByText(/rule_triggered/)).toBeInTheDocument()
+  })
+
+  it('renders Copy JSON and Open in explorer actions in the drawer', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    fireEvent.click(screen.getByText('Large Transfer'))
+    expect(screen.getByText('Copy JSON')).toBeInTheDocument()
+    expect(screen.getByText('Open in explorer')).toBeInTheDocument()
+  })
+
+  it('closes the drawer when Escape is pressed', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    fireEvent.click(screen.getByText('Large Transfer'))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
