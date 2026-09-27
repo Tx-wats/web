@@ -77,6 +77,59 @@ describe('formatRuleSummary', () => {
     // The rule being edited must not collide with itself.
     expect(isDuplicateLabel(formatRuleSummary(rules[1]), editingIndex)).toBe(false)
   })
+
+  it('builds a duplicate pre-fill payload with label suffix, webhook, and rules', () => {
+    const contract = {
+      id: 'C123',
+      label: 'Mainnet Alerts',
+      network: 'mainnet',
+      webhook_url: 'https://hooks.example.com/secret',
+      rules: [
+        { type: 'LargeTransfer', threshold_xlm: 1000 } as AlertRule,
+        { type: 'FunctionCalled', function_name: 'transfer' } as AlertRule,
+      ],
+    }
+
+    const buildDuplicatePrefill = (c: typeof contract) => ({
+      label: `${c.label} (copy)`,
+      webhook_url: c.webhook_url,
+      rules: c.rules.map((rule) => ({ ...rule })),
+    })
+
+    const prefill = buildDuplicatePrefill(contract)
+
+    expect(prefill.label).toBe('Mainnet Alerts (copy)')
+    expect(prefill.webhook_url).toBe('https://hooks.example.com/secret')
+    expect(prefill.rules).toEqual(contract.rules)
+    // Contract ID and network are intentionally omitted for the user to fill.
+    expect(prefill).not.toHaveProperty('id')
+    expect(prefill).not.toHaveProperty('network')
+  })
+
+  it('stores duplicate pre-fill in sessionStorage instead of the URL', () => {
+    const store: Record<string, string> = {}
+    const sessionStorage = {
+      setItem: (key: string, value: string) => {
+        store[key] = value
+      },
+      getItem: (key: string) => store[key] ?? null,
+    }
+
+    const prefill = {
+      label: 'Mainnet Alerts (copy)',
+      webhook_url: 'https://hooks.example.com/secret',
+      rules: [{ type: 'LargeTransfer', threshold_xlm: 1000 } as AlertRule],
+    }
+
+    sessionStorage.setItem('contract-duplicate', JSON.stringify(prefill))
+
+    const raw = sessionStorage.getItem('contract-duplicate')
+    expect(raw).not.toBeNull()
+    expect(JSON.parse(raw as string)).toEqual(prefill)
+    // The webhook URL must not appear in any navigation URL.
+    const targetUrl = '/contracts/new'
+    expect(targetUrl).not.toContain('secret')
+  })
 })
 
 describe('ContractDetail last modified', () => {

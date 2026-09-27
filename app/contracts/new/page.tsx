@@ -39,6 +39,31 @@ export default function NewContractPage() {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
+  // Pre-fill from a "Duplicate Contract" action. Data is passed via
+  // sessionStorage (never the URL) so the webhook URL is not leaked.
+  useEffect(() => {
+    let raw: string | null = null
+    try {
+      raw = sessionStorage.getItem('txwatch_duplicate_contract')
+      if (raw) sessionStorage.removeItem('txwatch_duplicate_contract')
+    } catch {
+      return
+    }
+    if (!raw) return
+    try {
+      const data = JSON.parse(raw) as {
+        label?: string
+        webhook_url?: string
+        rules?: AlertRule[]
+      }
+      if (typeof data.label === 'string') setLabel(data.label)
+      if (typeof data.webhook_url === 'string') setWebhookUrl(data.webhook_url)
+      if (Array.isArray(data.rules)) setRules(data.rules)
+    } catch {
+      // ignore malformed pre-fill data
+    }
+  }, [])
+
   function handleWalletConnect() {
     setErrors((prev) => ({ ...prev, wallet: undefined }))
   }
@@ -178,10 +203,26 @@ export default function NewContractPage() {
           {errors.contract_id && <p className="text-xs text-red-400 mt-1">{errors.contract_id}</p>}
         </div>
 
+        {/* Network */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-300 mb-1.5">Network</label>
+          <select
+            value={network}
+            onChange={(e) => { const n = e.target.value as Network; setNetwork(n); checkNetworkMismatch(n) }}
+            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 transition-colors"
+          >
+            <option value="testnet">Testnet</option>
+            <option value="mainnet">Mainnet</option>
+            <option value="futurenet">Futurenet</option>
+          </select>
+          {networkWarning && <p className="text-xs text-amber-400 mt-1">{networkWarning}</p>}
+        </div>
+
         {/* Webhook URL */}
         <div>
           <label className="block text-sm font-medium text-zinc-300 mb-1.5">Webhook URL</label>
           <input
+            type="url"
             type="text"
             placeholder="https://example.com/webhook"
             value={webhookUrl}
@@ -189,6 +230,40 @@ export default function NewContractPage() {
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
           />
           {errors.webhook_url && <p className="text-xs text-red-400 mt-1">{errors.webhook_url}</p>}
+        </div>
+
+        {/* Rules */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-300 mb-1.5">Alert Rules</label>
+          <RuleBuilder rules={rules} onChange={setRules} />
+          {errors.rules && <p className="text-xs text-red-400 mt-1">{errors.rules}</p>}
+        </div>
+
+        {/* Wallet */}
+        {!isConnected && (
+          <div>
+            <FreighterConnect onConnect={handleWalletConnect} />
+            {errors.wallet && <p className="text-xs text-red-400 mt-1">{errors.wallet}</p>}
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !isFormValid()}
+            className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors"
+          >
+            {saving ? 'Saving…' : 'Save Contract'}
+          </button>
+          <button
+            type="button"
+            onClick={handleTestWebhook}
+            disabled={testStatus === 'sending'}
+            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 text-sm font-medium rounded-lg px-4 py-2.5 transition-colors"
+          >
+            {testStatus === 'sending' ? 'Testing…' : 'Test Webhook'}
+          </button>
           <WebhookTestButton
             webhookUrl={webhookUrl}
             contractId={contractId}
@@ -198,6 +273,9 @@ export default function NewContractPage() {
             className="mt-2"
           />
         </div>
+        {testStatus === 'ok' && <p className="text-xs text-emerald-400">Webhook delivered successfully.</p>}
+        {testStatus === 'error' && <p className="text-xs text-red-400">{testError}</p>}
+      </div>
       </div>
       </div>
     </>
