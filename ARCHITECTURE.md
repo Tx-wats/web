@@ -37,7 +37,33 @@ This document maps key files and directories to their functional areas, helping 
 | `stellar.ts` | Stellar integration — Horizon URLs, Soroban RPC, contract validation, explorer links |
 | `storage.ts` | localStorage persistence — contract registry, settings, cache |
 | `api.ts` | Backend communication — fetch wrapper, webhook test, API calls |
-| `useContracts.ts` | React hook — contract state management, CRUD operations |
+| `contractsApi.ts` | Contract API — contract-specific data fetching |
+| `contractSort.ts` | Sorting utilities — sort contracts by various criteria |
+| `contractSync.ts` | Contract synchronization — sync contracts with backend |
+| `dashboard.ts` | Dashboard utilities — stats calculations, aggregations |
+| `exportStorage.ts` | Export functionality — export contracts and settings |
+| `formatAmount.ts` | Number formatting — format tokens, amounts, decimals |
+| `format.ts` | General formatting — dates, addresses, hashes |
+| `importSchema.ts` | Import functionality — schema validation for imports |
+| `notifications.ts` | Notification handling — toast messages, alerts |
+| `ruleMeta.ts` | Alert rule metadata — rule type definitions |
+| `storageLogger.ts` | Storage debugging — log storage operations |
+| `webhookSignature.ts` | Webhook verification — HMAC-SHA256 signature validation |
+| `migrations.ts` | Storage migrations — schema version management |
+| `alertSource.ts` | Alert source utilities — alert classification |
+| `useAlerts.ts` | React hook — alert state management |
+| `useAnalytics.ts` | React hook — analytics tracking |
+| `useContracts.ts` | React hook — contract state management |
+| `useFreighter.ts` | React hook — Freighter wallet interaction |
+| `useFreighterConnection.ts` | React hook — wallet connection state |
+| `useWallet.ts` | React hook — wallet utilities |
+| `links.ts` | Centralized repository URLs — GitHub org, repo links |
+
+### `/hooks` — Custom React Hooks
+
+| File | Responsibility |
+|---|---|
+| (All hook files use `use*` naming in lib/) | Custom React hooks for state management and logic |
 
 ### `/types` — TypeScript Definitions
 

@@ -27,8 +27,15 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Format check
+        run: npm run format:check
+
       - name: Type-check
-        run: npx tsc --noEmit
+        run: npm run typecheck
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+        continue-on-error: true
 
       - name: Build
         run: npm run build

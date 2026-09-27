@@ -17,12 +17,40 @@ Create a simple mock API server (e.g., `mock-server.js`):
 ```javascript
 const http = require('http')
 
+const mockContract = {
+  id: 'test-123',
+  label: 'Test Contract',
+  contract_id: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+  network: 'testnet',
+  rules: [
+    { type: 'LargeTransfer', threshold_xlm: 1000 }
+  ],
+  webhook_url: 'https://webhook.site/test',
+  created_at: Date.now(),
+  updated_at: Date.now(),
+}
+
+const mockAlertPayload = {
+  label: 'Test Contract',
+  contract_id: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+  network: 'testnet',
+  rule_triggered: 'LargeTransfer',
+  transaction_hash: 'abc123def456',
+  function_name: 'transfer',
+  amount: 5000,
+  timestamp: Date.now(),
+  horizon_link: 'https://horizon-testnet.stellar.org/transactions/abc123def456',
+}
+
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json')
 
   if (req.url === '/contracts' && req.method === 'GET') {
     res.writeHead(200)
-    res.end(JSON.stringify([{ id: 'test-contract', name: 'Test' }]))
+    res.end(JSON.stringify([mockContract]))
+  } else if (req.url === '/webhook/test' && req.method === 'POST') {
+    res.writeHead(200)
+    res.end(JSON.stringify(mockAlertPayload))
   } else {
     res.writeHead(404)
     res.end(JSON.stringify({ error: 'Not found' }))
@@ -43,10 +71,19 @@ Run with: `node mock-server.js`
 
 ## Testing
 
-Use `apiFetch()` from `lib/api.ts` for all API calls. Mock `fetch` in tests:
+Use `apiFetch()` from `lib/api.ts` for all API calls. Mock `fetch` in tests with Vitest:
 
 ```typescript
-jest.mock('lib/api')
-// or
-global.fetch = jest.fn().mockResolvedValue(...)
+import { vi } from 'vitest'
+
+// Mock the entire api module
+vi.mock('lib/api', () => ({
+  apiFetch: vi.fn().mockResolvedValue({ data: [] }),
+}))
+
+// Or stub fetch globally
+vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+  ok: true,
+  json: async () => ({ data: [] }),
+}))
 ```
