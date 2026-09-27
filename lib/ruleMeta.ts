@@ -1,4 +1,4 @@
-import { AlertRuleType } from '@/types'
+import { AlertRuleType, isAlertRuleType } from '@/types'
 
 export interface RuleMeta {
   label: string
@@ -34,6 +34,10 @@ export const RULE_META: Record<AlertRuleType, RuleMeta> = {
   },
 }
 
-export function getRuleMeta(type: AlertRuleType): RuleMeta {
-  return RULE_META[type]
+const UNKNOWN_STYLE = 'bg-zinc-800 text-zinc-400 border-zinc-600'
+
+/** Returns metadata for a rule type, falling back to a neutral style and the raw string for unknown types. */
+export function getRuleMeta(type: AlertRuleType | string): RuleMeta {
+  if (isAlertRuleType(type)) return RULE_META[type]
+  return { label: type || 'Unknown', description: `Unknown rule type: ${type || '(empty)'}`, style: UNKNOWN_STYLE }
 }

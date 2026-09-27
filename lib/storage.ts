@@ -1,4 +1,4 @@
-import { WatchedContract, AlertPayload, Network } from '@/types'
+import { WatchedContract, AlertPayload, AlertRule, Network, parseAlertRule } from '@/types'
 import { HORIZON_URLS } from './stellar'
 import { safeParseStorage } from './storageLogger'
 
@@ -165,7 +165,12 @@ export function migrateStorage(migrations: Record<number, () => void>) {
 }
 
 export function getContracts(): WatchedContract[] {
-  return load<WatchedContract>(CONTRACTS_KEY)
+  return load<WatchedContract>(CONTRACTS_KEY).map((c) => ({
+    ...c,
+    rules: Array.isArray(c.rules)
+      ? c.rules.map(parseAlertRule).filter((r): r is AlertRule => r !== null)
+      : [],
+  }))
 }
 
 export function getContract(id: string): WatchedContract | undefined {
