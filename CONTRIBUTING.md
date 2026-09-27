@@ -1,20 +1,20 @@
 # Contributing to stellar-txwatch-web
 
-Thanks for your interest in contributing! This is the web dashboard for the [Tx-wat](https://github.com/Tx-wat) org.
+Thanks for your interest in contributing! This is the web dashboard for the [Tx-wats](https://github.com/Tx-wats) org.
 
 ## Sister repos
 
 | Repo | Description |
 |------|-------------|
-| [stellar-txwatch-core](https://github.com/Tx-wat/stellar-txwatch-core) | Rust monitoring engine |
-| [stellar-txwatch-contracts](https://github.com/Tx-wat/stellar-txwatch-contracts) | Soroban smart contracts |
-| [stellar-txwatch-web](https://github.com/Tx-wat/stellar-txwatch-web) | This repo - Next.js dashboard |
+| [stellar-txwatch-core](https://github.com/Tx-wats/stellar-txwatch-core) | Rust monitoring engine |
+| [stellar-txwatch-contracts](https://github.com/Tx-wats/stellar-txwatch-contracts) | Soroban smart contracts |
+| [web](https://github.com/Tx-wats/web) | This repo - Next.js dashboard |
 
 ## Local setup
 
 ```bash
-git clone https://github.com/Tx-wat/stellar-txwatch-web
-cd stellar-txwatch-web
+git clone https://github.com/Tx-wats/web
+cd web
 npm install
 cp .env.example .env.local
 npm run dev
@@ -24,8 +24,11 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 18.17 or later
+- npm (installed with Node.js)
 - [Freighter wallet extension](https://www.freighter.app/) for wallet-gated features
+
+Note: The project specifies `engines.node >= 18.17` in `package.json`. CI enforces this using Node 20.
 
 ## Branch naming
 
@@ -53,4 +56,16 @@ All types live in `types/index.ts` and must stay in sync with the Rust structs i
 
 - Keep PRs focused - one feature or fix per PR
 - All pages must be mobile responsive and dark-mode compatible
-- Run `npm run build` before opening a PR - zero lint errors required
+- Run `npm run format`, `npm run typecheck`, and `npm run lint` before opening a PR
+- Update documentation if you modify file responsibilities — see [ARCHITECTURE.md](../ARCHITECTURE.md)
+- Include a PR description matching the template in `.github/pull_request_template.md`
+
+### Pre-submission checklist
+
+```bash
+npm run format      # Auto-format code
+npm run format:check # Verify formatting
+npm run typecheck   # Check TypeScript types
+npm run lint        # Run ESLint
+npm run build       # Verify the build
+```

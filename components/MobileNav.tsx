@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { links as repoLinks } from '@/lib/links'
 
-const links = [
+const navLinks = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/contracts', label: 'Contracts' },
   { href: '/settings', label: 'Settings' },
-  { href: 'https://github.com/Tx-wat', label: 'GitHub', external: true },
+  { href: repoLinks.org, label: 'GitHub', external: true },
 ]
 
 export default function MobileNav() {
@@ -45,7 +46,7 @@ export default function MobileNav() {
               </button>
             </div>
             <nav className="flex flex-col gap-4">
-              {links.map((l) =>
+              {navLinks.map((l) =>
                 l.external ? (
                   <a
                     key={l.href}

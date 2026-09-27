@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import FreighterConnect from '@/components/FreighterConnect'
+import { links } from '@/lib/links'
 
 const features = [
   {
@@ -109,26 +110,26 @@ export default function LandingPage() {
         <p className="text-zinc-500 text-sm">
           Open source - Part of the{' '}
           <a
-            href="https://github.com/Tx-wat"
+            href={links.org}
             target="_blank"
             rel="noopener noreferrer"
             className="text-indigo-400 hover:text-indigo-300 transition-colors"
           >
-            Tx-wat
+            Tx-wats
           </a>{' '}
           GitHub org
         </p>
         <div className="flex items-center justify-center gap-4 text-xs text-zinc-600">
-          <a href="https://github.com/Tx-wat/stellar-txwatch-core" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">
+          <a href={links.core} target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">
             txwatch-core
           </a>
           <span>|</span>
-          <a href="https://github.com/Tx-wat/stellar-txwatch-contracts" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">
+          <a href={links.contracts} target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">
             txwatch-contracts
           </a>
           <span>|</span>
-          <a href="https://github.com/Tx-wat/stellar-txwatch-web" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">
-            txwatch-web
+          <a href={links.repo} target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">
+            web
           </a>
         </div>
       </section>

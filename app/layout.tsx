@@ -6,6 +6,7 @@ import WalletStatusBadge from '@/components/WalletStatusBadge'
 import MobileNav from '@/components/MobileNav'
 import AlertPruner from '@/components/AlertPruner'
 import StorageBootstrap from '@/components/StorageBootstrap'
+import { links } from '@/lib/links'
 
 export const metadata: Metadata = {
   title: {
@@ -34,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/contracts" className="hover:text-zinc-100 transition-colors">Contracts</Link>
               <Link href="/settings" className="hover:text-zinc-100 transition-colors">Settings</Link>
               <a
-                href="https://github.com/Tx-wat"
+                href={links.org}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-zinc-100 transition-colors"
