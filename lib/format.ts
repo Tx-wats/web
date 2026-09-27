@@ -76,6 +76,34 @@ export function formatRelativeTime(
 }
 
 /**
+ * Masks a webhook URL so embedded secrets (Slack/Discord tokens, ?key= params)
+ * are not shown in plain text. Keeps the origin and the start of the path, and
+ * replaces the remainder with a fixed mask.
+ *
+ * e.g. "https://hooks.slack.com/services/T00/B00/XXXX" ->
+ *      "https://hooks.slack.com/services/…/****"
+ */
+export function maskWebhookUrl(url: string): string {
+  if (!url) {
+    return ''
+  }
+
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    // Not a parseable URL — mask everything after the first few characters.
+    return url.length > 8 ? `${url.slice(0, 8)}…****` : '****'
+  }
+
+  const segments = parsed.pathname.split('/').filter(Boolean)
+  const visible = segments.slice(0, 1).join('/')
+  const maskedPath = visible ? `/${visible}/…/****` : '/…/****'
+
+  return `${parsed.origin}${maskedPath}`
+}
+
+/**
  * Formats an alert rule as a human-readable summary string.
  *
  * The LargeTransfer operator matches tx-watch-core, which fires when a
