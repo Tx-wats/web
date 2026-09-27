@@ -16,6 +16,7 @@ import WebhookLog from '@/components/WebhookLog'
 import RuleBuilder from '@/components/RuleBuilder'
 import CopyButton from '@/components/CopyButton'
 import NotificationToggle from '@/components/NotificationToggle'
+import Modal from '@/components/Modal'
 import { notifyNewAlerts } from '@/lib/notifications'
 import { useAlertSync } from '@/hooks/useAlertSync'
 
@@ -182,9 +183,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
 
   function handleCancelMetadataEdit() {
     if (hasMetadataChanges()) {
-      if (confirm('You have unsaved changes. Are you sure you want to discard them?')) {
-        setShowEditMetadata(false)
-      }
+      setShowUnsavedWarning(true)
     } else {
       setShowEditMetadata(false)
     }
@@ -257,6 +256,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
           </button>
           <button
             onClick={() => setShowDelete(true)}
+            className="px-3 py-1.5 rounded-lg border border-red-900/60 hover:border-red-700 text-sm text-red-400 hover:text-red-300 transition-colors"
             className="px-3 py-1.5 rounded-lg border border-red-900/50 hover:border-red-700 text-sm text-red-400 hover:text-red-300 transition-colors"
           >
             Delete
@@ -264,6 +264,137 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
         </div>
       </div>
 
+      {/* Edit Details Modal */}
+      <Modal
+        open={showEditMetadata}
+        onClose={handleCancelMetadataEdit}
+        title="Edit Details"
+      >
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <label htmlFor="edit-label" className="block text-sm font-medium text-zinc-300">
+              Label
+            </label>
+            <input
+              id="edit-label"
+              type="text"
+              value={editedLabel}
+              onChange={(e) => setEditedLabel(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-950 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="edit-webhook" className="block text-sm font-medium text-zinc-300">
+              Webhook URL
+            </label>
+            <input
+              id="edit-webhook"
+              type="text"
+              value={editedWebhookUrl}
+              onChange={(e) => setEditedWebhookUrl(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-zinc-700 bg-zinc-950 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+          {metadataError && (
+            <p className="text-sm text-red-400">{metadataError}</p>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={handleCancelMetadataEdit}
+              className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveMetadata}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Rules Modal */}
+      <Modal
+        open={showEditRules}
+        onClose={handleCancelEdit}
+        title="Edit Rules"
+      >
+        <div className="space-y-4">
+          <RuleBuilder rules={editedRules} onChange={setEditedRules} />
+          {rulesError && (
+            <p className="text-sm text-red-400">{rulesError}</p>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={handleCancelEdit}
+              className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveRules}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Discard Changes Modal */}
+      <Modal
+        open={showUnsavedWarning}
+        onClose={() => setShowUnsavedWarning(false)}
+        title="Discard Changes?"
+        destructive
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-400">
+            You have unsaved changes. Are you sure you want to discard them?
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setShowUnsavedWarning(false)}
+              className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+            >
+              Keep Editing
+            </button>
+            <button
+              onClick={confirmDiscard}
+              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-medium text-white transition-colors"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Modal */}
+      <Modal
+        open={showDelete}
+        onClose={() => setShowDelete(false)}
+        title="Delete Contract"
+        destructive
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-400">
+            Are you sure you want to delete <span className="font-medium text-zinc-200">{contract.label}</span>? This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={() => setShowDelete(false)}
+              className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-medium text-white transition-colors"
+            >
+              Delete
+            </button>
       {/* Registered card */}
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5 space-y-3">
         <h2 className="text-sm font-semibold text-zinc-300">Registered</h2>
@@ -442,8 +573,33 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
             </div>
           </div>
         </div>
-      )}
+      </Modal>
 
+      {/* Alerts */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-zinc-100">Alerts</h2>
+          <NotificationToggle contractId={contract.contract_id} />
+        </div>
+        {alerts.length === 0 ? (
+          <p className="text-sm text-zinc-500">No alerts yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {alerts.map((a) => (
+              <li key={a.id} className="rounded-lg border border-zinc-800 bg-zinc-900 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <AlertRuleBadge rule={a.rule} />
+                  <span className="text-xs text-zinc-500">{formatDate(a.created_at)}</span>
+                </div>
+                <p className="mt-1 text-sm text-zinc-300">{formatRuleSummary(a.rule)}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Webhook Log */}
+      <WebhookLog contractId={contract.contract_id} />
       {showDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900 p-5 space-y-4">
