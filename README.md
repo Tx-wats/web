@@ -5,6 +5,7 @@ Web dashboard for Stellar TxWatch - register contracts and manage real-time aler
 Part of the [Tx-wats](https://github.com/Tx-wats) GitHub org.
 
 [![CI](https://github.com/Tx-wats/web/actions/workflows/ci.yml/badge.svg)](https://github.com/Tx-wats/web/actions/workflows/ci.yml)
+[![Node](https://img.shields.io/badge/node-%3E%3D18.17-green)](package.json)
 
 ## What it does
 
@@ -27,7 +28,7 @@ Part of the [Tx-wats](https://github.com/Tx-wats) GitHub org.
 
 ```bash
 git clone https://github.com/Tx-wats/web
-cd tx-watch-web
+cd web
 npm install
 cp .env.example .env.local
 npm run dev
@@ -222,7 +223,7 @@ explorerContractUrl('mainnet', contractId) // https://stellar.expert/explorer/pu
 
 ### Extending alert rules
 
-Alert rules are defined in `types/index.ts` and must stay in sync with the Rust structs in [`tx-watch-core`](https://github.com/Tx-wats/core). To add a new rule type:
+Alert rules are defined in `types/index.ts` and must stay in sync with the Rust structs in [`stellar-txwatch-core`](https://github.com/Tx-wats/stellar-txwatch-core). To add a new rule type:
 
 1. Add the variant to `AlertRuleType` in `types/index.ts`
 2. Add a label and colour to `AlertRuleBadge.tsx`
@@ -304,8 +305,8 @@ See [`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
 
 ## Sister repos
 
-- [tx-watch-core](https://github.com/Tx-wats/core) - Rust monitoring engine
-- [tx-watch-contracts](https://github.com/Tx-wats/contracts) - Soroban smart contracts
+- [stellar-txwatch-core](https://github.com/Tx-wats/stellar-txwatch-core) - Rust monitoring engine
+- [stellar-txwatch-contracts](https://github.com/Tx-wats/stellar-txwatch-contracts) - Soroban smart contracts
 
 ## Data Persistence
 
@@ -381,3 +382,8 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 ## License
 
 MIT
+
+## Handsoff notes
+
+<!-- handsoff-issue-37 -->
+- #37: Stop Using Array Indexes as React Keys for Rules and Alerts

@@ -15,6 +15,9 @@ export interface AlertSyncState {
 /**
  * Poll tx-watch-core for a contract's alerts while mounted. No-op when
  * NEXT_PUBLIC_API_URL is unset (localStorage-only mode).
+ *
+ * Alerts are keyed by (contractId, network) so the same contract ID
+ * registered on different networks does not mix alert history.
  */
 export function useAlertSync(
   contractId: string | undefined,

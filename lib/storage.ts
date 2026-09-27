@@ -1,11 +1,11 @@
 import { WatchedContract, AlertPayload, AlertRule, Network, parseAlertRule } from '@/types'
 import { HORIZON_URLS } from './stellar'
-import { safeParseStorage } from './storageLogger'
+import { safeParseStorage, storageLogger } from './storageLogger'
 
 export const CONTRACTS_KEY = 'txwatch_contracts'
 const ALERTS_KEY = 'txwatch_alerts'
 const STORAGE_VERSION_KEY = 'txwatch_storage_version'
-const CURRENT_STORAGE_VERSION = 1
+const CURRENT_STORAGE_VERSION = 2
 const STORAGE_EVENT = 'txwatch:storage'
 
 function getStorage(): Storage | undefined {
@@ -13,10 +13,50 @@ function getStorage(): Storage | undefined {
   return (globalThis as unknown as { localStorage?: Storage }).localStorage
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+// Minimal shape checks so corrupted entries are dropped instead of crashing consumers.
+function isValidContract(value: unknown): value is WatchedContract {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.contract_id === 'string' &&
+    typeof value.network === 'string'
+  )
+}
+
+function isValidAlert(value: unknown): value is AlertPayload {
+  return (
+    isRecord(value) &&
+    typeof value.contract_id === 'string' &&
+    typeof value.timestamp === 'number'
+  )
+}
+
+function isValidEntry(key: string, value: unknown): boolean {
+  if (key === CONTRACTS_KEY) return isValidContract(value)
+  if (key === ALERTS_KEY) return isValidAlert(value)
+  return true
+}
+
 function load<T>(key: string): T[] {
   const storage = getStorage()
   if (!storage) return []
-  return safeParseStorage<T[]>(key, [])
+  const parsed = safeParseStorage<unknown>(key, [])
+  if (!Array.isArray(parsed)) {
+    storageLogger.warn('storage: non-array value, resetting to []', { key, value: parsed })
+    return []
+  }
+  const valid = parsed.filter((entry) => isValidEntry(key, entry))
+  if (valid.length < parsed.length) {
+    storageLogger.warn('storage: dropped malformed entries', {
+      key,
+      dropped: parsed.length - valid.length,
+    })
+  }
+  return valid as T[]
 }
 
 const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024 // 5MB typical limit
@@ -164,6 +204,16 @@ export function migrateStorage(migrations: Record<number, () => void>) {
   setStorageVersion(CURRENT_STORAGE_VERSION)
 }
 
+// Migration v2: add the `enabled` flag (default true) to every watched contract.
+export function migrateContractsToV2() {
+  const contracts = getContracts()
+  const migrated = contracts.map((c) => ({
+    ...c,
+    enabled: c.enabled ?? true,
+  }))
+  save(CONTRACTS_KEY, migrated)
+}
+
 export function getContracts(): WatchedContract[] {
   return load<WatchedContract>(CONTRACTS_KEY).map((c) => ({
     ...c,
@@ -207,7 +257,7 @@ export function addContract(contract: WatchedContract) {
 
 export function saveContract(contract: WatchedContract): boolean {
   const contracts = getContracts()
-  const updated = { ...contract, updated_at: Date.now() }
+  const updated = { ...contract, enabled: contract.enabled ?? true, updated_at: Date.now() }
   const index = contracts.findIndex((c) => c.id === contract.id)
   if (index === -1) {
     return save(CONTRACTS_KEY, [...contracts, updated])
@@ -215,6 +265,22 @@ export function saveContract(contract: WatchedContract): boolean {
   const next = contracts.slice()
   next[index] = updated
   return save(CONTRACTS_KEY, next)
+}
+
+export function setContractEnabled(id: string, enabled: boolean): boolean {
+  const contract = getContract(id)
+  if (!contract) return false
+  return saveContract({ ...contract, enabled })
+}
+
+export function toggleContractEnabled(id: string): boolean {
+  const contract = getContract(id)
+  if (!contract) return false
+  return saveContract({ ...contract, enabled: !(contract.enabled ?? true) })
+}
+
+export function getActiveContractCount(): number {
+  return getContracts().filter((c) => c.enabled ?? true).length
 }
 
 export function deleteContract(id: string) {
@@ -236,9 +302,13 @@ export function deleteAlert(alertId: string) {
 }
 
 export function getAlerts(contractId: string): AlertPayload[] {
-  return load<AlertPayload>(ALERTS_KEY).filter(
-    (a) => a.contract_id === contractId
-  )
+  return load<AlertPayload>(ALERTS_KEY)
+    .filter((a) => a.contract_id === contractId)
+    .sort((a, b) => b.timestamp - a.timestamp)
+}
+
+export function getLatestAlert(contractId: string): AlertPayload | undefined {
+  return getAlerts(contractId)[0]
 }
 
 export function seedMockAlerts(
@@ -270,8 +340,7 @@ export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: st
   }
   const all = [...load<AlertPayload>(ALERTS_KEY), normalizedAlert]
   const counts: Record<string, number> = {}
-  save(ALERTS_KEY, all.filter((a) => {
-    counts[a.contract_id] = (counts[a.contract_id] ?? 0) + 1
-    return counts[a.contract_id] <= MAX_ALERTS_PER_CONTRACT
-  }))
+  save(ALERTS_KEY, all)
+  return normalizedAlert
 }
+  // Itera

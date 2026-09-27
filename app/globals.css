@@ -5,6 +5,37 @@
 :root {
   --background: #09090b;
   --foreground: #fafafa;
+  /* #113: shadcn design tokens for components */
+  --primary: 262.1 80% 50%;
+  --primary-foreground: 210 40% 96%;
+  --secondary: 217.2 91.2% 59.8%;
+  --secondary-foreground: 210 40% 96%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 96%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 16.3% 46.9%;
+  --accent: 262.1 80% 50%;
+  --accent-foreground: 210 40% 96%;
+  --card: #09090b;
+  --card-foreground: #fafafa;
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 262.1 80% 50%;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --background: #ffffff;
+    --foreground: #09090b;
+    --primary: 262.1 80% 50%;
+    --primary-foreground: #ffffff;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 13.9% 34.9%;
+    --accent: 262.1 80% 50%;
+    --card: #ffffff;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+  }
 }
 
 body {

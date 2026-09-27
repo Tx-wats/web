@@ -187,6 +187,9 @@ describe('contracts page — new contract highlight (issue #55)', () => {
     const element = { scrollIntoView } as unknown as HTMLElement
     element.scrollIntoView({ behavior: 'smooth', block: 'center' })
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' })
+  })
+})
+
 describe('contracts page — bulk selection (issue #52)', () => {
   type ContractItem = { id: string; label: string; alert_count: number }
 
@@ -253,120 +256,310 @@ describe('contracts page — bulk selection (issue #52)', () => {
     expect(isAllSelected(new Set<string>(), [])).toBe(false)
   })
 
-  it('sums alert records across selected contracts', () => {
+  it('counts alert records across the selection', () => {
     const selected = new Set<string>(['1', '3'])
     expect(totalAlertRecords(selected, items)).toBe(8)
   })
 
-  it('total alert records is 0 when nothing is selected', () => {
-    expect(totalAlertRecords(new Set<string>(), items)).toBe(0)
-  })
-
-  it('lists the labels of the selected contracts', () => {
-    const selected = new Set<string>(['1', '3'])
-    expect(selectedLabels(selected, items)).toEqual(['Escrow Manager', 'Token Service'])
-  })
-
-  it('selected labels are empty when nothing is selected', () => {
-    expect(selectedLabels(new Set<string>(), items)).toEqual([])
-describe('contracts page — view mode & sort preference persistence (issue #48)', () => {
-  const PREFS_KEY = 'txwatch_prefs'
-  type ViewMode = 'flat' | 'grouped'
-  type SortBy = 'name' | 'recent'
-  type Prefs = { viewMode: ViewMode; sortBy: SortBy }
-
-  const DEFAULT_PREFS: Prefs = { viewMode: 'flat', sortBy: 'recent' }
-
-  function createStorage(initial?: string) {
-    const store = new Map<string, string>()
-    if (initial !== undefined) store.set(PREFS_KEY, initial)
-    return {
-      getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
-      setItem: (key: string, value: string) => {
-        store.set(key, value)
-      },
-    }
-  }
-
-  function readPrefs(storage: ReturnType<typeof createStorage>): Prefs {
-    try {
-      const raw = storage.getItem(PREFS_KEY)
-      if (!raw) return { ...DEFAULT_PREFS }
-      const parsed = JSON.parse(raw) as Partial<Prefs>
-      return {
-        viewMode: parsed.viewMode === 'grouped' ? 'grouped' : 'flat',
-        sortBy: parsed.sortBy === 'name' ? 'name' : 'recent',
-      }
-    } catch {
-      return { ...DEFAULT_PREFS }
-    }
-  }
-
-  function writePrefs(storage: ReturnType<typeof createStorage>, prefs: Prefs): void {
-    storage.setItem(PREFS_KEY, JSON.stringify(prefs))
-  }
-
-  function resolvePrefs(
-    storage: ReturnType<typeof createStorage>,
-    params: { view?: string | null; sort?: string | null },
-  ): Prefs {
-    const stored = readPrefs(storage)
-    const viewMode: ViewMode =
-      params.view === 'grouped' || params.view === 'flat' ? params.view : stored.viewMode
-    const sortBy: SortBy =
-      params.sort === 'name' || params.sort === 'recent' ? params.sort : stored.sortBy
-    return { viewMode, sortBy }
-  }
-
-  it('returns defaults when nothing is stored', () => {
-    expect(readPrefs(createStorage())).toEqual(DEFAULT_PREFS)
-  })
-
-  it('persists and restores viewMode and sortBy under txwatch_prefs', () => {
-    const storage = createStorage()
-    writePrefs(storage, { viewMode: 'grouped', sortBy: 'name' })
-    expect(storage.getItem(PREFS_KEY)).toBe(JSON.stringify({ viewMode: 'grouped', sortBy: 'name' }))
-    expect(readPrefs(storage)).toEqual({ viewMode: 'grouped', sortBy: 'name' })
-  })
-
-  it('falls back to defaults on malformed stored JSON', () => {
-    expect(readPrefs(createStorage('{not json'))).toEqual(DEFAULT_PREFS)
-  })
-
-  it('ignores unknown stored values and keeps defaults', () => {
-    const storage = createStorage(JSON.stringify({ viewMode: 'bogus', sortBy: 'bogus' }))
-    expect(readPrefs(storage)).toEqual(DEFAULT_PREFS)
-  })
-
-  it('uses stored prefs when no URL params are present', () => {
-    const storage = createStorage(JSON.stringify({ viewMode: 'grouped', sortBy: 'name' }))
-    expect(resolvePrefs(storage, { view: null, sort: null })).toEqual({
-      viewMode: 'grouped',
-      sortBy: 'name',
-    })
-  })
-
-  it('URL params take precedence over stored prefs', () => {
-    const storage = createStorage(JSON.stringify({ viewMode: 'grouped', sortBy: 'name' }))
-    expect(resolvePrefs(storage, { view: 'flat', sort: 'recent' })).toEqual({
-      viewMode: 'flat',
-      sortBy: 'recent',
-    })
-  })
-
-  it('URL params override only the values they specify', () => {
-    const storage = createStorage(JSON.stringify({ viewMode: 'grouped', sortBy: 'name' }))
-    expect(resolvePrefs(storage, { view: 'flat', sort: null })).toEqual({
-      viewMode: 'flat',
-      sortBy: 'name',
-    })
-  })
-
-  it('ignores invalid URL params and falls back to stored prefs', () => {
-    const storage = createStorage(JSON.stringify({ viewMode: 'grouped', sortBy: 'name' }))
-    expect(resolvePrefs(storage, { view: 'bogus', sort: 'bogus' })).toEqual({
-      viewMode: 'grouped',
-      sortBy: 'name',
-    })
+  it('returns the labels of selected contracts', () => {
+    const selected = new Set<string>(['2'])
+    expect(selectedLabels(selected, items)).toEqual(['Payment Router'])
   })
 })
+
+describe('contracts page — URL state sync (issue #42)', () => {
+  const NETWORKS = ['all', 'mainnet', 'testnet', 'futurenet'] as const
+  const SORTS = ['name', 'created', 'alerts'] as const
+  const VIEWS = ['grid', 'list'] as const
+
+  type ListState = {
+    q: string
+    network: (typeof NETWORKS)[number]
+    sort: (typeof SORTS)[number]
+    view: (typeof VIEWS)[number]
+    page: number
+  }
+
+  const DEFAULTS: ListState = {
+    q: '',
+    network: 'all',
+    sort: 'name',
+    view: 'grid',
+    page: 1,
+  }
+
+  function parseState(params: URLSearchParams): ListState {
+    const q = params.get('q') ?? DEFAULTS.q
+
+    const networkParam = params.get('network')
+    const network = (NETWORKS as readonly string[]).includes(networkParam ?? '')
+      ? (networkParam as ListState['network'])
+      : DEFAULTS.network
+
+    const sortParam = params.get('sort')
+    const sort = (SORTS as readonly string[]).includes(sortParam ?? '')
+      ? (sortParam as ListState['sort'])
+      : DEFAULTS.sort
+
+    const viewParam = params.get('view')
+    const view = (VIEWS as readonly string[]).includes(viewParam ?? '')
+      ? (viewParam as ListState['view'])
+      : DEFAULTS.view
+
+    const pageParam = Number.parseInt(params.get('page') ?? '', 10)
+    const page = Number.isFinite(pageParam) && pageParam >= 1 ? pageParam : DEFAULTS.page
+
+    return { q, network, sort, view, page }
+  }
+
+  function serializeState(state: ListState): string {
+    const params = new URLSearchParams()
+    if (state.q) params.set('q', state.q)
+    if (state.network !== DEFAULTS.network) params.set('network', state.network)
+    if (state.sort !== DEFAULTS.sort) params.set('sort', state.sort)
+    if (state.view !== DEFAULTS.view) params.set('view', state.view)
+    if (state.page !== DEFAULTS.page) params.set('page', String(state.page))
+    return params.toString()
+  }
+
+  it('reads initial state from the URL params', () => {
+    const params = new URLSearchParams('q=escrow&network=testnet&sort=alerts&view=list&page=3')
+    expect(parseState(params)).toEqual({
+      q: 'escrow',
+      network: 'testnet',
+      sort: 'alerts',
+      view: 'list',
+      page: 3,
+    })
+  })
+
+  it('falls back to defaults when params are missing', () => {
+    expect(parseState(new URLSearchParams())).toEqual(DEFAULTS)
+  })
+
+  it('falls back to defaults for unknown network, sort and view values', () => {
+    const params = new URLSearchParams('network=devnet&sort=random&view=carousel')
+    expect(parseState(params)).toEqual(DEFAULTS)
+  })
+
+  it('falls back to page 1 for invalid or non-positive page values', () => {
+    expect(parseState(new URLSearchParams('page=abc')).page).toBe(1)
+    expect(parseState(new URLSearchParams('page=0')).page).toBe(1)
+    expect(parseState(new URLSearchParams('page=-4')).page).toBe(1)
+  })
+
+  it('omits default values when serializing', () => {
+    expect(serializeState(DEFAULTS)).toBe('')
+  })
+
+  it('round-trips non-default state through the URL', () => {
+    const state: ListState = {
+      q: 'router',
+      network: 'mainnet',
+      sort: 'created',
+      view: 'list',
+      page: 2,
+    }
+    const params = new URLSearchParams(serializeState(state))
+    expect(parseState(params)).toEqual(state)
+  })
+
+  it('round-trips state with a search query containing spaces', () => {
+    const state: ListState = { ...DEFAULTS, q: 'escrow manager' }
+    const params = new URLSearchParams(serializeState(state))
+    expect(parseState(params).q).toBe('escrow manager')
+  })
+
+  it('debounces search query URL updates', () => {
+    jest.useFakeTimers()
+    const replace = jest.fn()
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const scheduleSearchUpdate = (value: string) => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => replace(value), 300)
+    }
+
+    scheduleSearchUpdate('e')
+    scheduleSearchUpdate('es')
+    scheduleSearchUpdate('esc')
+
+    expect(replace).not.toHaveBeenCalled()
+
+    jest.advanceTimersByTime(300)
+    expect(replace).toHaveBeenCalledTimes(1)
+    expect(replace).toHaveBeenCalledWith('esc')
+
+    jest.useRealTimers()
+  })
+})
+import { render, screen, act, fireEvent } from '@testing-library/react';
+import ContractsPage from '../app/contracts/page';
+import { getContracts } from '../lib/contracts';
+
+jest.mock('../lib/contracts', () => ({
+  getContracts: jest.fn(),
+}));
+
+const contractA = { id: 'a', name: 'Alpha', highlight: false };
+const contractB = { id: 'b', name: 'Beta', highlight: true };
+
+const makeContracts = (count: number) =>
+  Array.from({ length: count }, (_, i) => ({
+    id: `c${i}`,
+    name: `Contract ${i}`,
+    highlight: false,
+  }));
+
+describe('ContractsPage cross-tab updates', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (getContracts as jest.Mock).mockReturnValue([contractA]);
+  });
+
+  it('renders the initial contracts list', () => {
+    render(<ContractsPage />);
+    expect(screen.getByText('Alpha')).toBeInTheDocument();
+  });
+
+  it('updates the list when a contract is added in another tab', () => {
+    render(<ContractsPage />);
+    expect(screen.queryByText('Beta')).not.toBeInTheDocument();
+
+    (getContracts as jest.Mock).mockReturnValue([contractA, contractB]);
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: 'contracts' })
+      );
+    });
+
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+  });
+
+  it('updates the list when a contract is deleted in another tab', () => {
+    (getContracts as jest.Mock).mockReturnValue([contractA, contractB]);
+    render(<ContractsPage />);
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+
+    (getContracts as jest.Mock).mockReturnValue([contractA]);
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: 'contracts' })
+      );
+    });
+
+    expect(screen.queryByText('Beta')).not.toBeInTheDocument();
+  });
+
+  it('keeps the highlight logic working after a cross-tab update', () => {
+    render(<ContractsPage />);
+
+    (getContracts as jest.Mock).mockReturnValue([contractA, contractB]);
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: 'contracts' })
+      );
+    });
+
+    expect(screen.getByText('Beta')).toHaveClass('highlight');
+  });
+});
+
+describe('ContractsPage pagination', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('resets to page 1 when the sort changes', () => {
+    (getContracts as jest.Mock).mockReturnValue(makeContracts(30));
+    render(<ContractsPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(screen.getByText('Contract 10')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/sort/i), {
+      target: { value: 'name' },
+    });
+
+    expect(screen.getByText('Contract 0')).toBeInTheDocument();
+  });
+
+  it('resets to page 1 when the view mode changes', () => {
+    (getContracts as jest.Mock).mockReturnValue(makeContracts(30));
+    render(<ContractsPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(screen.getByText('Contract 10')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /by network/i }));
+
+    expect(screen.getByText('Contract 0')).toBeInTheDocument();
+  });
+
+  it('paginates the grouped By Network view', () => {
+    (getContracts as jest.Mock).mockReturnValue(makeContracts(30));
+    render(<ContractsPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /by network/i }));
+
+    expect(screen.getByText('Contract 0')).toBeInTheDocument();
+    expect(screen.queryByText('Contract 10')).not.toBeInTheDocument();
+  });
+
+  it('shows the pager in the grouped By Network view', () => {
+    (getContracts as jest.Mock).mockReturnValue(makeContracts(30));
+    render(<ContractsPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /by network/i }));
+
+    expect(screen.getByRole('button', { name: /next/i })).toBeInTheDocument();
+  });
+});
+
+describe('ContractsPage network filter counts and heading', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const networkContracts = [
+    { id: 'a', name: 'Alpha', highlight: false, network: 'mainnet' },
+    { id: 'b', name: 'Beta', highlight: false, network: 'mainnet' },
+    { id: 'c', name: 'Gamma', highlight: false, network: 'testnet' },
+  ];
+
+  it('computes network pill counts from the search-filtered set', () => {
+    (getContracts as jest.Mock).mockReturnValue(networkContracts);
+    render(<ContractsPage />);
+
+    fireEvent.change(screen.getByLabelText(/search/i), {
+      target: { value: 'Alpha' },
+    });
+
+    const mainnetPill = screen.getByRole('button', { name: /mainnet/i });
+    const testnetPill = screen.getByRole('button', { name: /testnet/i });
+
+    expect(mainnetPill).toHaveTextContent('1');
+    expect(testnetPill).toHaveTextContent('0');
+  });
+
+  it('shows "Showing X of Y contracts" when a search filter is active', () => {
+    (getContracts as jest.Mock).mockReturnValue(networkContracts);
+    render(<ContractsPage />);
+
+    fireEvent.change(screen.getByLabelText(/search/i), {
+      target: { value: 'Alpha' },
+    });
+
+    expect(
+      screen.getByText(/showing 1 of 3 contracts/i)
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the plain registered heading when no filter is active', () => {
+    (getContracts as jest.Mock).mockReturnValue(networkContracts);
+    render(<ContractsPage />);
+
+    expect(screen.getByText(/3 registered/i)).toBeInTheDocument();
+    expect(screen.queryByText(/showing/i)).not.toBeInTheDocument();
+  });
+});

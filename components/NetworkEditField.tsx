@@ -8,6 +8,17 @@ interface NetworkEditFieldProps {
   currentNetwork: StellarNetwork;
   onNetworkChange: (network: StellarNetwork) => void | Promise<void>;
   disabled?: boolean;
+  /**
+   * Optional duplicate check run before the switch is committed.
+   * Should resolve to true when a contract with the same contract_id
+   * already exists on the target network (i.e. the switch is a duplicate).
+   */
+  checkDuplicate?: (network: StellarNetwork) => boolean | Promise<boolean>;
+  /**
+   * Called after a successful switch so the caller can clear network-scoped
+   * state (alert history / duplicate-detection context), matching the warning copy.
+   */
+  onAlertHistoryCleared?: (network: StellarNetwork) => void | Promise<void>;
 }
 
 const NETWORK_OPTIONS: { value: StellarNetwork; label: string }[] = [
@@ -32,15 +43,19 @@ export function NetworkEditField({
   currentNetwork,
   onNetworkChange,
   disabled = false,
+  checkDuplicate,
+  onAlertHistoryCleared,
 }: NetworkEditFieldProps) {
   const [editing, setEditing]         = useState(false);
   const [pendingNetwork, setPending]  = useState<StellarNetwork | null>(null);
   const [saving, setSaving]           = useState(false);
   const [showWarning, setShowWarning] = useState(false);
+  const [error, setError]             = useState<string | null>(null);
 
   function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const selected = e.target.value as StellarNetwork;
     if (selected === currentNetwork) return;
+    setError(null);
     setPending(selected);
     setShowWarning(true);
   }
@@ -48,19 +63,35 @@ export function NetworkEditField({
   async function handleConfirm() {
     if (!pendingNetwork) return;
     setSaving(true);
+    setError(null);
     try {
+      if (checkDuplicate) {
+        const isDuplicate = await checkDuplicate(pendingNetwork);
+        if (isDuplicate) {
+          setError(
+            `A contract with this contract ID already exists on ${pendingNetwork}. ` +
+              'Choose a different network or remove the duplicate first.',
+          );
+          return;
+        }
+      }
       await onNetworkChange(pendingNetwork);
-    } finally {
-      setSaving(false);
+      // Warning copy states alert history is cleared on switch.
+      if (onAlertHistoryCleared) {
+        await onAlertHistoryCleared(pendingNetwork);
+      }
       setShowWarning(false);
       setPending(null);
       setEditing(false);
+    } finally {
+      setSaving(false);
     }
   }
 
   function handleCancel() {
     setPending(null);
     setShowWarning(false);
+    setError(null);
   }
 
   if (!editing) {
@@ -101,7 +132,7 @@ export function NetworkEditField({
         </select>
         <button
           type="button"
-          onClick={() => { setEditing(false); setPending(null); setShowWarning(false); }}
+          onClick={() => { setEditing(false); setPending(null); setShowWarning(false); setError(null); }}
           className="text-xs text-muted-foreground hover:text-foreground"
           aria-label="Cancel network edit"
         >
@@ -134,6 +165,11 @@ export function NetworkEditField({
               </p>
             </div>
           </div>
+          {error && (
+            <p role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
           <div className="flex gap-2 justify-end">
             <button
               type="button"
