@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { WatchedContract, AlertPayload, AlertRule } from '@/types'
+import { WatchedContract, AlertPayload, AlertRule, isRuleEnabled } from '@/types'
 import { getContract, getAlerts } from '@/lib/storage'
 import { syncSaveContract, syncDeleteContract } from '@/lib/contractSync'
 import { getContract, deleteContract, getAlerts, saveContract, seedMockAlerts } from '@/lib/storage'
@@ -10,6 +10,7 @@ import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
 import { formatDate, formatRuleSummary } from '@/lib/format'
 import { useAnalytics } from '@/lib/useAnalytics'
 import NetworkBadge from '@/components/NetworkBadge'
+import NetworkEditField from '@/components/NetworkEditField'
 import AlertRuleBadge from '@/components/AlertRuleBadge'
 import WebhookLog from '@/components/WebhookLog'
 import RuleBuilder from '@/components/RuleBuilder'
@@ -35,6 +36,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   const [showEditMetadata, setShowEditMetadata] = useState(false)
   const [editedLabel, setEditedLabel] = useState('')
   const [editedWebhookUrl, setEditedWebhookUrl] = useState('')
+  const [editedNetwork, setEditedNetwork] = useState<WatchedContract['network']>('testnet')
   const [metadataError, setMetadataError] = useState<string | null>(null)
 
   const sync = useAlertSync(contract?.contract_id, contract?.network, (fresh) => {
@@ -79,6 +81,14 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
     trackEvent('rule_edit_saved', { contractId: params.id, ruleCount: editedRules.length })
   }
 
+  function toggleRule(index: number) {
+    const rules = contract!.rules.map((r, i) => (i === index ? { ...r, enabled: !isRuleEnabled(r) } : r))
+    const updated = { ...contract!, rules }
+    void syncSaveContract(updated, false)
+    if (!saveContract(updated)) return
+    setContract(updated)
+  }
+
   function hasUnsavedChanges(): boolean {
     return JSON.stringify(editedRules) !== JSON.stringify(contract?.rules ?? [])
   }
@@ -100,6 +110,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   function openEditMetadata() {
     setEditedLabel(contract!.label)
     setEditedWebhookUrl(contract!.webhook_url)
+    setEditedNetwork(contract!.network)
     setMetadataError(null)
     setShowEditMetadata(true)
     trackEvent('metadata_edit_opened', { contractId: params.id })
@@ -130,24 +141,43 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
       return
     }
 
+    const networkChanged = editedNetwork !== contract!.network
+
+    // Duplicate contract_id + network check before saving a network switch
+    if (networkChanged) {
+      const existing = getContract(contract!.contract_id)
+      if (existing && existing.network === editedNetwork) {
+        setMetadataError('A contract with this ID already exists on the selected network')
+        return
+      }
+    }
+
     // Save changes
     const updated = { 
       ...contract!, 
       label: trimmedLabel,
-      webhook_url: trimmedWebhookUrl
+      webhook_url: trimmedWebhookUrl,
+      network: editedNetwork
     }
     void syncSaveContract(updated, false)
     if (!saveContract(updated)) {
       setMetadataError('Could not save: browser storage is full or unavailable')
       return
     }
+
+    // Alert history is cleared on network switch, matching the warning copy
+    if (networkChanged) {
+      setAlerts([])
+      trackEvent('network_switched', { contractId: params.id, network: editedNetwork })
+    }
+
     setContract(updated)
     setShowEditMetadata(false)
     trackEvent('metadata_edit_saved', { contractId: params.id })
   }
 
   function hasMetadataChanges(): boolean {
-    return editedLabel !== contract?.label || editedWebhookUrl !== contract?.webhook_url
+    return editedLabel !== contract?.label || editedWebhookUrl !== contract?.webhook_url || editedNetwork !== contract?.network
   }
 
   function handleCancelMetadataEdit() {
@@ -296,11 +326,25 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
         ) : (
           <div className="flex flex-wrap gap-2">
             {contract.rules.map((rule, i) => (
-              <div key={i} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2">
+              <div
+                key={i}
+                data-testid="active-rule"
+                className={`flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 ${isRuleEnabled(rule) ? '' : 'opacity-50'}`}
+              >
                 <AlertRuleBadge type={rule.type} />
                 {formatRuleSummary(rule) && (
                   <span className="text-xs font-mono text-zinc-400">{formatRuleSummary(rule)}</span>
                 )}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isRuleEnabled(rule)}
+                  aria-label={isRuleEnabled(rule) ? 'Disable rule' : 'Enable rule'}
+                  onClick={() => toggleRule(i)}
+                  className="text-xs text-zinc-400 hover:text-zinc-100"
+                >
+                  {isRuleEnabled(rule) ? 'On' : 'Off'}
+                </button>
               </div>
             ))}
           </div>
@@ -315,164 +359,51 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
         </div>
       </div>
 
-      {/* Edit Metadata Modal */}
+      {/* Edit Details modal */}
       {showEditMetadata && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-lg w-full space-y-4">
-            <h3 className="text-lg font-semibold text-zinc-100">Edit Contract Details</h3>
-            
-            <div className="space-y-4">
-              {/* Label field */}
-              <div>
-                <label htmlFor="edit-label" className="block text-sm font-medium text-zinc-300 mb-2">
-                  Label
-                </label>
-                <input
-                  id="edit-label"
-                  type="text"
-                  value={editedLabel}
-                  onChange={(e) => setEditedLabel(e.target.value)}
-                  placeholder="My Contract"
-                  maxLength={100}
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-                <p className="text-xs text-zinc-500 mt-1">
-                  {editedLabel.length}/100 characters
-                </p>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 space-y-4">
+            <h2 className="text-lg font-semibold text-zinc-100">Edit Details</h2>
 
-              {/* Webhook URL field */}
-              <div>
-                <label htmlFor="edit-webhook" className="block text-sm font-medium text-zinc-300 mb-2">
-                  Webhook URL
-                </label>
-                <input
-                  id="edit-webhook"
-                  type="url"
-                  value={editedWebhookUrl}
-                  onChange={(e) => setEditedWebhookUrl(e.target.value)}
-                  placeholder="https://example.com/webhook"
-                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-                <p className="text-xs text-zinc-500 mt-1">
-                  Must be a valid HTTP or HTTPS URL
-                </p>
-              </div>
+            <div className="space-y-1">
+              <label className="text-sm text-zinc-400">Label</label>
+              <input
+                value={editedLabel}
+                onChange={(e) => setEditedLabel(e.target.value)}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              />
             </div>
+
+            <div className="space-y-1">
+              <label className="text-sm text-zinc-400">Webhook URL</label>
+              <input
+                value={editedWebhookUrl}
+                onChange={(e) => setEditedWebhookUrl(e.target.value)}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+              />
+            </div>
+
+            <NetworkEditField
+              value={editedNetwork}
+              onChange={setEditedNetwork}
+            />
 
             {metadataError && (
-              <div className="bg-red-900/20 border border-red-800 rounded-lg p-3">
-                <p className="text-xs text-red-400">{metadataError}</p>
-              </div>
+              <p className="text-sm text-red-400">{metadataError}</p>
             )}
 
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={saveMetadata}
-                className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
-              >
-                Save Changes
-              </button>
+            <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={handleCancelMetadataEdit}
-                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+                className="px-3 py-1.5 rounded-lg border border-zinc-700 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
               >
                 Cancel
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Modal */}
-      {showDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-sm w-full space-y-4">
-            <h3 className="text-lg font-semibold text-zinc-100">Delete Contract?</h3>
-            <div className="space-y-2 text-sm text-zinc-400">
-              <p>
-                This will permanently remove <span className="text-zinc-200 font-medium">{contract.label}</span> and cannot be undone.
-              </p>
-              <p className="text-xs text-zinc-500">
-                Deleted data:
-              </p>
-              <ul className="text-xs text-zinc-500 list-disc list-inside space-y-1">
-                <li>Contract configuration and alert rules</li>
-                <li>All {alerts.length} alert {alerts.length === 1 ? 'record' : 'records'}</li>
-              </ul>
-            </div>
-            <div className="flex gap-3">
               <button
-                onClick={handleDelete}
-                className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-medium text-white transition-colors"
+                onClick={saveMetadata}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
               >
-                Delete
-              </button>
-              <button
-                onClick={() => setShowDelete(false)}
-                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Rules Modal */}
-      {showEditRules && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-lg w-full space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-zinc-100">Edit Alert Rules</h3>
-            <RuleBuilder
-              rules={editedRules}
-              onChange={setEditedRules}
-              onRulesChanged={(rules, action) =>
-                trackEvent(action === 'remove' ? 'rule_removed' : 'rule_added', {
-                  contractId: params.id,
-                  ruleCount: rules.length,
-                })
-              }
-            />
-            {rulesError && <p className="text-xs text-red-400">{rulesError}</p>}
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={saveRules}
-                className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
-              >
-                Save Rules
-              </button>
-              <button
-                onClick={handleCancelEdit}
-                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Unsaved Changes Warning Modal */}
-      {showUnsavedWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-sm w-full space-y-4">
-            <h3 className="text-lg font-semibold text-zinc-100">Discard Changes?</h3>
-            <p className="text-sm text-zinc-400">
-              You have unsaved changes to your alert rules. Are you sure you want to discard them?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={confirmDiscard}
-                className="flex-1 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-medium text-white transition-colors"
-              >
-                Discard
-              </button>
-              <button
-                onClick={() => setShowUnsavedWarning(false)}
-                className="flex-1 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
-              >
-                Keep Editing
+                Save
               </button>
             </div>
           </div>
