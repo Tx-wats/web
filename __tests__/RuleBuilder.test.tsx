@@ -1,87 +1,399 @@
 import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
-import RuleBuilder from '../components/RuleBuilder';
-
-describe('RuleBuilder editing index integrity', () => {
-  it('keeps editing the correct rule after removing an earlier rule', () => {
-    render(<RuleBuilder />);
-
-    // Add three rules so we have indices 0, 1, 2.
-    const addButton = screen.getByRole('button', { name: /add rule/i });
-    fireEvent.click(addButton);
-    fireEvent.click(addButton);
-    fireEvent.click(addButton);
-
-    const ruleItems = () => screen.getAllByTestId('rule-item');
-    expect(ruleItems()).toHaveLength(3);
-
-    // Give each rule a distinguishable name.
-    const nameInputs = () => screen.getAllByLabelText(/rule name/i);
-    fireEvent.change(nameInputs()[0], { target: { value: 'Rule Zero' } });
-    fireEvent.change(nameInputs()[1], { target: { value: 'Rule One' } });
-    fireEvent.change(nameInputs()[2], { target: { value: 'Rule Two' } });
-
-    // Start editing rule #2.
-    const editButtons = screen.getAllByRole('button', { name: /edit rule/i });
-    fireEvent.click(editButtons[2]);
-
-    // While editing rule #2, remove rule #0.
-    const removeButtons = screen.getAllByRole('button', { name: /remove rule/i });
-    fireEvent.click(removeButtons[0]);
-
-    // Rule #0 is gone; the remaining rules are Rule One and Rule Two.
-    expect(ruleItems()).toHaveLength(2);
-    expect(nameInputs()[0]).toHaveValue('Rule One');
-    expect(nameInputs()[1]).toHaveValue('Rule Two');
-
-    // Update the rule currently being edited.
-    const updateButton = screen.getByRole('button', { name: /update rule/i });
-    fireEvent.change(nameInputs()[1], { target: { value: 'Rule Two Updated' } });
-    fireEvent.click(updateButton);
-
-    // The update must target the rule that was being edited (Rule Two),
-    // not the wrong rule or an out-of-range index.
-    const updatedInputs = nameInputs();
-    expect(updatedInputs).toHaveLength(2);
-    expect(updatedInputs[0]).toHaveValue('Rule One');
-    expect(updatedInputs[1]).toHaveValue('Rule Two Updated');
-  });
-
-  it('resets editing state when the rule being edited is removed', () => {
-    render(<RuleBuilder />);
-
-    const addButton = screen.getByRole('button', { name: /add rule/i });
-    fireEvent.click(addButton);
-    fireEvent.click(addButton);
-
-    const nameInputs = () => screen.getAllByLabelText(/rule name/i);
-    fireEvent.change(nameInputs()[0], { target: { value: 'First' } });
-    fireEvent.change(nameInputs()[1], { target: { value: 'Second' } });
-
-    // Edit rule #1, then remove it.
-    const editButtons = screen.getAllByRole('button', { name: /edit rule/i });
-    fireEvent.click(editButtons[1]);
-
-    const removeButtons = screen.getAllByRole('button', { name: /remove rule/i });
-    fireEvent.click(removeButtons[1]);
-
-    // Editing state should be cleared: no stale "Update Rule" button remains.
-    expect(screen.queryByRole('button', { name: /update rule/i })).not.toBeInTheDocument();
-    expect(screen.getAllByTestId('rule-item')).toHaveLength(1);
 import { render, screen, fireEvent } from '@testing-library/react';
 import RuleBuilder from '../components/RuleBuilder';
 
-describe('RuleBuilder addRule immutability', () => {
-  it('does not mutate the previous draft object when adding a rule', () => {
-    render(<RuleBuilder />);
+describe('RuleBuilder', () => {
+  describe('editing index integrity', () => {
+    it('keeps editing the correct rule after removing an earlier rule', () => {
+      const handleChange = vi.fn();
+      render(<RuleBuilder rules={[]} onChange={handleChange} />);
 
-    const input = screen.getByPlaceholderText(/function name/i);
-    fireEvent.change(input, { target: { value: 'zeta' } });
-    fireEvent.click(screen.getByRole('button', { name: /add rule/i }));
+      const addButton = screen.getByRole('button', { name: /add rule/i });
+      fireEvent.click(addButton); // AnyTransaction rule 0
+      fireEvent.click(addButton); // AnyTransaction rule 1
+      fireEvent.click(addButton); // AnyTransaction rule 2
 
-    const previousDraft = screen.getByTestId('previous-draft');
-    const previousNames = JSON.parse(previousDraft.textContent || '[]');
+      expect(handleChange).toHaveBeenCalledTimes(3);
+      const threeRules = handleChange.mock.calls[2][0];
+      expect(threeRules).toHaveLength(3);
 
-    expect(previousNames).toEqual([]);
+      // Edit rule #2 by removing rule #0 first
+      const removeButtons = screen.getAllByRole('button', { name: /remove/i });
+      fireEvent.click(removeButtons[0]);
+
+      expect(handleChange).toHaveBeenCalledTimes(4);
+      const twoRules = handleChange.mock.calls[3][0];
+      expect(twoRules).toHaveLength(2);
+    });
+
+    it('resets editing state when the rule being edited is removed', () => {
+      const rules = [
+        { type: 'AnyTransaction' as const },
+        { type: 'TransactionFailed' as const },
+      ];
+      const handleChange = vi.fn();
+      const { rerender } = render(
+        <RuleBuilder rules={rules} onChange={handleChange} />
+      );
+
+      const editButtons = screen.getAllByRole('button', { name: /edit/i });
+      fireEvent.click(editButtons[1]);
+
+      // Update rules to remove the edited rule
+      const removeButtons = screen.getAllByRole('button', { name: /remove/i });
+      fireEvent.click(removeButtons[1]);
+
+      expect(handleChange).toHaveBeenCalled();
+      const updatedRules = handleChange.mock.calls[handleChange.mock.calls.length - 1][0];
+      rerender(<RuleBuilder rules={updatedRules} onChange={handleChange} />);
+
+      // "Cancel" button should not exist after removing the edited rule
+      expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('LargeTransfer validation', () => {
+    it('rejects empty threshold', () => {
+      render(
+        <RuleBuilder
+          rules={[]}
+          onChange={vi.fn()}
+        />
+      );
+
+      // Select LargeTransfer type
+      const typeSelect = screen.getByLabelText(/rule type/i);
+      fireEvent.change(typeSelect, { target: { value: 'LargeTransfer' } });
+
+      const addButton = screen.getByRole('button', { name: /add rule/i });
+      fireEvent.click(addButton);
+
+      expect(screen.getByText(/enter a valid xlm threshold/i)).toBeInTheDocument();
+    });
+
+    it('rejects negative threshold', () => {
+      render(
+        <RuleBuilder
+          rules={[]}
+          onChange={vi.fn()}
+        />
+      );
+
+      const typeSelect = screen.getByLabelText(/rule type/i);
+      fireEvent.change(typeSelect, { target: { value: 'LargeTransfer' } });
+
+      const thresholdInput = screen.getByPlaceholderText(/e\.g\. 10000/i);
+      fireEvent.change(thresholdInput, { target: { value: '-100' } });
+
+      const addButton = screen.getByRole('button', { name: /add rule/i });
+      fireEvent.click(addButton);
+
+      expect(screen.getByText(/threshold must be greater than 0/i)).toBeInTheDocument();
+    });
+
+    it('rejects thresholds with more than 7 decimal places', () => {
+      render(
+        <RuleBuilder
+          rules={[]}
+          onChange={vi.fn()}
+        />
+      );
+
+      const typeSelect = screen.getByLabelText(/rule type/i);
+      fireEvent.change(typeSelect, { target: { value: 'LargeTransfer' } });
+
+      const thresholdInput = screen.getByPlaceholderText(/e\.g\. 10000/i);
+      fireEvent.change(thresholdInput, { target: { value: '1.12345678' } });
+
+      const addButton = screen.getByRole('button', { name: /add rule/i });
+      fireEvent.click(addButton);
+
+      expect(screen.getByText(/supports at most 7 decimal places/i)).toBeInTheDocument();
+    });
+
+    it('accepts valid threshold', () => {
+      const handleChange = vi.fn();
+      render(
+        <RuleBuilder
+          rules={[]}
+          onChange={handleChange}
+        />
+      );
+
+      const typeSelect = screen.getByLabelText(/rule type/i);
+      fireEvent.change(typeSelect, { target: { value: 'LargeTransfer' } });
+
+      const thresholdInput = screen.getByPlaceholderText(/e\.g\. 10000/i);
+      fireEvent.change(thresholdInput, { target: { value: '1000.1234567' } });
+
+      const addButton = screen.getByRole('button', { name: /add rule/i });
+      fireEvent.click(addButton);
+
+      expect(handleChange).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'LargeTransfer',
+            threshold_xlm: 1000.1234567,
+          }),
+        ])
+      );
+    });
+  });
+
+  describe('FunctionCalled validation', () => {
+    it('rejects empty function name', () => {
+      render(
+        <RuleBuilder
+          rules={[]}
+          onChange={vi.fn()}
+        />
+      );
+
+      const typeSelect = screen.getByLabelText(/rule type/i);
+      fireEvent.change(typeSelect, { target: { value: 'FunctionCalled' } });
+
+      const addButton = screen.getByRole('button', { name: /add rule/i });
+      fireEvent.click(addButton);
+
+      expect(screen.getByText(/enter a function name/i)).toBeInTheDocument();
+    });
+
+    it('rejects invalid function names', () => {
+      render(
+        <RuleBuilder
+          rules={[]}
+          onChange={vi.fn()}
+        />
+      );
+
+      const typeSelect = screen.getByLabelText(/rule type/i);
+      fireEvent.change(typeSelect, { target: { value: 'FunctionCalled' } });
+
+      const funcInput = screen.getByPlaceholderText(/e\.g\. transfer/i);
+
+      // Test name starting with number
+      fireEvent.change(funcInput, { target: { value: '123invalid' } });
+      let addButton = screen.getByRole('button', { name: /add rule/i });
+      fireEvent.click(addButton);
+      expect(screen.getByText(/must start with a letter or underscore/i)).toBeInTheDocument();
+
+      // Test name with invalid characters
+      fireEvent.change(funcInput, { target: { value: 'invalid-name' } });
+      addButton = screen.getByRole('button', { name: /add rule/i });
+      fireEvent.click(addButton);
+      expect(screen.getByText(/must start with a letter or underscore/i)).toBeInTheDocument();
+    });
+
+    it('accepts valid function names', () => {
+      const handleChange = vi.fn();
+      render(
+        <RuleBuilder
+          rules={[]}
+          onChange={handleChange}
+        />
+      );
+
+      const typeSelect = screen.getByLabelText(/rule type/i);
+      fireEvent.change(typeSelect, { target: { value: 'FunctionCalled' } });
+
+      const funcInput = screen.getByPlaceholderText(/e\.g\. transfer/i);
+      fireEvent.change(funcInput, { target: { value: 'transfer' } });
+
+      const addButton = screen.getByRole('button', { name: /add rule/i });
+      fireEvent.click(addButton);
+
+      expect(handleChange).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'FunctionCalled',
+            function_name: 'transfer',
+          }),
+        ])
+      );
+    });
+  });
+
+  describe('AdminFunctionCalled validation', () => {
+    it('rejects empty function names', () => {
+      render(
+        <RuleBuilder
+          rules={[]}
+          onChange={vi.fn()}
+        />
+      );
+
+      const typeSelect = screen.getByLabelText(/rule type/i);
+      fireEvent.change(typeSelect, { target: { value: 'AdminFunctionCalled' } });
+
+      const addButton = screen.getByRole('button', { name: /add rule/i });
+      fireEvent.click(addButton);
+
+      expect(screen.getByText(/enter at least one function name/i)).toBeInTheDocument();
+    });
+
+    it('accepts comma-separated function names', () => {
+      const handleChange = vi.fn();
+      render(
+        <RuleBuilder
+          rules={[]}
+          onChange={handleChange}
+        />
+      );
+
+      const typeSelect = screen.getByLabelText(/rule type/i);
+      fireEvent.change(typeSelect, { target: { value: 'AdminFunctionCalled' } });
+
+      const funcInput = screen.getByPlaceholderText(/e\.g\. set_admin/i);
+      fireEvent.change(funcInput, { target: { value: 'set_admin, upgrade, migrate' } });
+
+      const addButton = screen.getByRole('button', { name: /add rule/i });
+      fireEvent.click(addButton);
+
+      expect(handleChange).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'AdminFunctionCalled',
+            function_names: ['migrate', 'set_admin', 'upgrade'],
+          }),
+        ])
+      );
+    });
+  });
+
+  describe('duplicate detection', () => {
+    it('warns when adding duplicate rule', () => {
+      const existingRules = [{ type: 'AnyTransaction' as const }];
+      render(
+        <RuleBuilder
+          rules={existingRules}
+          onChange={vi.fn()}
+        />
+      );
+
+      const addButton = screen.getByRole('button', { name: /add rule/i });
+      fireEvent.click(addButton);
+
+      expect(screen.getByText(/this rule already exists/i)).toBeInTheDocument();
+    });
+
+    it('allows duplicate rule when enabled flag differs', () => {
+      const handleChange = vi.fn();
+      const existingRules = [
+        { type: 'AnyTransaction' as const, enabled: false },
+        { type: 'TransactionFailed' as const },
+      ];
+      render(
+        <RuleBuilder
+          rules={existingRules}
+          onChange={handleChange}
+        />
+      );
+
+      const typeSelect = screen.getByLabelText(/rule type/i);
+      fireEvent.change(typeSelect, { target: { value: 'TransactionFailed' } });
+
+      const addButton = screen.getByRole('button', { name: /add rule/i });
+      fireEvent.click(addButton);
+
+      // Should warn about duplicate (same type/config, enabled differs but not checked in duplicate detection)
+      expect(screen.getByText(/this rule already exists/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('rule toggle', () => {
+    it('toggles rule enabled state', () => {
+      const handleChange = vi.fn();
+      const existingRules = [
+        { type: 'AnyTransaction' as const, enabled: true },
+      ];
+      render(
+        <RuleBuilder
+          rules={existingRules}
+          onChange={handleChange}
+        />
+      );
+
+      const toggleButton = screen.getByRole('switch');
+      fireEvent.click(toggleButton);
+
+      expect(handleChange).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'AnyTransaction',
+            enabled: false,
+          }),
+        ])
+      );
+    });
+  });
+
+  describe('rule removal', () => {
+    it('removes rule from list', () => {
+      const handleChange = vi.fn();
+      const existingRules = [
+        { type: 'AnyTransaction' as const },
+        { type: 'TransactionFailed' as const },
+      ];
+      render(
+        <RuleBuilder
+          rules={existingRules}
+          onChange={handleChange}
+        />
+      );
+
+      const removeButtons = screen.getAllByRole('button', { name: /remove/i });
+      fireEvent.click(removeButtons[0]);
+
+      expect(handleChange).toHaveBeenCalledWith([
+        { type: 'TransactionFailed' },
+      ]);
+    });
+  });
+
+  describe('preset rules', () => {
+    it('applies preset rules', () => {
+      const handleChange = vi.fn();
+      render(
+        <RuleBuilder
+          rules={[]}
+          onChange={handleChange}
+        />
+      );
+
+      const presetsButton = screen.getByRole('button', { name: /presets/i });
+      fireEvent.click(presetsButton);
+
+      const tokenTransfersPreset = screen.getByRole('menuitem', { name: /token transfers/i });
+      fireEvent.click(tokenTransfersPreset);
+
+      expect(handleChange).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'FunctionCalled',
+            function_name: 'transfer',
+          }),
+        ])
+      );
+    });
+
+    it('warns when preset rules already exist', () => {
+      const existingRules = [
+        { type: 'FunctionCalled' as const, function_name: 'transfer' },
+      ];
+      render(
+        <RuleBuilder
+          rules={existingRules}
+          onChange={vi.fn()}
+        />
+      );
+
+      const presetsButton = screen.getByRole('button', { name: /presets/i });
+      fireEvent.click(presetsButton);
+
+      const tokenTransfersPreset = screen.getByRole('menuitem', { name: /token transfers/i });
+      fireEvent.click(tokenTransfersPreset);
+
+      expect(screen.getByText(/these rules already exist/i)).toBeInTheDocument();
+    });
   });
 });

@@ -30,7 +30,17 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
 
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build
         env:
           NEXT_PUBLIC_API_URL: ""
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: coverage/

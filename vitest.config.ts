@@ -10,6 +10,24 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
+    // #122: Coverage configuration
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html', 'lcov'],
+      exclude: [
+        'node_modules/',
+        '.next/',
+        'coverage/',
+        '*.config.ts',
+        '*.config.js',
+        'vitest.setup.ts',
+        '**/*.d.ts',
+      ],
+      lines: 50,
+      functions: 50,
+      branches: 50,
+      statements: 50,
+    },
   },
   resolve: {
     alias: {
