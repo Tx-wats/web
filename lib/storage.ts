@@ -1,6 +1,6 @@
-import { WatchedContract, AlertPayload, Network } from '@/types'
+import { WatchedContract, AlertPayload, AlertRule, Network, parseAlertRule } from '@/types'
 import { HORIZON_URLS } from './stellar'
-import { safeParseStorage } from './storageLogger'
+import { safeParseStorage, storageLogger } from './storageLogger'
 
 export const CONTRACTS_KEY = 'txwatch_contracts'
 const ALERTS_KEY = 'txwatch_alerts'
@@ -13,10 +13,50 @@ function getStorage(): Storage | undefined {
   return (globalThis as unknown as { localStorage?: Storage }).localStorage
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+// Minimal shape checks so corrupted entries are dropped instead of crashing consumers.
+function isValidContract(value: unknown): value is WatchedContract {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.contract_id === 'string' &&
+    typeof value.network === 'string'
+  )
+}
+
+function isValidAlert(value: unknown): value is AlertPayload {
+  return (
+    isRecord(value) &&
+    typeof value.contract_id === 'string' &&
+    typeof value.timestamp === 'number'
+  )
+}
+
+function isValidEntry(key: string, value: unknown): boolean {
+  if (key === CONTRACTS_KEY) return isValidContract(value)
+  if (key === ALERTS_KEY) return isValidAlert(value)
+  return true
+}
+
 function load<T>(key: string): T[] {
   const storage = getStorage()
   if (!storage) return []
-  return safeParseStorage<T[]>(key, [])
+  const parsed = safeParseStorage<unknown>(key, [])
+  if (!Array.isArray(parsed)) {
+    storageLogger.warn('storage: non-array value, resetting to []', { key, value: parsed })
+    return []
+  }
+  const valid = parsed.filter((entry) => isValidEntry(key, entry))
+  if (valid.length < parsed.length) {
+    storageLogger.warn('storage: dropped malformed entries', {
+      key,
+      dropped: parsed.length - valid.length,
+    })
+  }
+  return valid as T[]
 }
 
 const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024 // 5MB typical limit
@@ -165,7 +205,12 @@ export function migrateStorage(migrations: Record<number, () => void>) {
 }
 
 export function getContracts(): WatchedContract[] {
-  return load<WatchedContract>(CONTRACTS_KEY)
+  return load<WatchedContract>(CONTRACTS_KEY).map((c) => ({
+    ...c,
+    rules: Array.isArray(c.rules)
+      ? c.rules.map(parseAlertRule).filter((r): r is AlertRule => r !== null)
+      : [],
+  }))
 }
 
 export function getContract(id: string): WatchedContract | undefined {
@@ -272,3 +317,4 @@ export function addAlert(alert: AlertPayload | (AlertPayload & { contractId?: st
   save(ALERTS_KEY, all)
   return normalizedAlert
 }
+  // Itera

@@ -103,6 +103,44 @@ describe('saveContract / getContracts', () => {
   });
 });
 
+describe('corrupted / non-array storage values', () => {
+  const cases: Array<[string, string]> = [
+    ['object', '{}'],
+    ['string', '"x"'],
+    ['number', '42'],
+    ['null', 'null'],
+  ];
+
+  for (const [name, raw] of cases) {
+    it(`returns [] for a stored ${name} value`, () => {
+      localStorage.setItem('txwatch_contracts', raw);
+      expect(getContracts()).toEqual([]);
+    });
+  }
+
+  it('drops array entries that fail the minimal shape check', () => {
+    localStorage.setItem(
+      'txwatch_contracts',
+      JSON.stringify([contract1, { id: 'bad' }, null, 'nope', 7]),
+    );
+    const contracts = getContracts();
+    expect(contracts).toHaveLength(1);
+    expect(contracts[0].id).toBe('c1');
+  });
+
+  it('reports corrupted and dropped entries via storageLogger', () => {
+    const events: unknown[] = [];
+    const off = onStorageError((e) => events.push(e));
+    localStorage.setItem('txwatch_contracts', '{}');
+    getContracts();
+    localStorage.setItem('txwatch_contracts', JSON.stringify([contract1, { id: 'bad' }]));
+    getContracts();
+    off();
+    clearStorageErrorHandlers();
+    expect(events.length).toBeGreaterThan(0);
+  });
+});
+
 describe('deleteContract', () => {
   it('removes the correct contract by id', () => {
     saveContract(contract1);
@@ -156,10 +194,12 @@ describe('addAlert / getAlerts — newest-first ordering', () => {
     addAlert(alert1);
     const alerts = getAlerts('c1');
     expect(alerts.map((a) => a.timestamp)).toEqual([3, 2, 1]);
+    const alerts = getAlerts('c1', 'testnet');
+    expect(alerts.map((a) => (a as { id?: string }).id)).toEqual(['a1', 'a2', 'a3']);
   });
 
   it('returns empty array when no alerts exist for a contract (empty fallback)', () => {
-    expect(getAlerts('no-such-contract')).toEqual([]);
+    expect(getAlerts('no-such-contract', 'testnet')).toEqual([]);
   });
 });
 
@@ -183,7 +223,7 @@ describe('deleteAlert', () => {
     addAlert(alert1);
     addAlert(alert2);
     deleteAlert('a1');
-    const alerts = getAlerts('c1');
+    const alerts = getAlerts('c1', 'testnet');
     expect(alerts).toHaveLength(1);
     expect((alerts[0] as { id?: string }).id).toBe('a2');
   });
@@ -200,7 +240,7 @@ describe('alert retention pruning', () => {
     const s = await import('../storage')
     localStorage.setItem('txwatch_alerts', JSON.stringify([alert(100)]))
     s.addAlert(alert(1))
-    expect(s.getAlerts('CX')).toHaveLength(1)
+    expect(s.getAlerts('CX', 'testnet')).toHaveLength(1)
   })
 
   it('honours configurable retention', async () => {
@@ -208,13 +248,29 @@ describe('alert retention pruning', () => {
     localStorage.setItem('txwatch_alerts', JSON.stringify([alert(10), alert(1)]))
     s.setRetentionDays(5)
     expect(s.getRetentionDays()).toBe(5)
-    expect(s.getAlerts('CX')).toHaveLength(1)
+    expect(s.getAlerts('CX', 'testnet')).toHaveLength(1)
   })
 })
+
+describe('per-contract alert cap', () => {
+  const makeAlert = (i: number) => ({
+    label: 'a', contract_id: 'CX', network: 'testnet', rule_triggered: 'AnyTransaction',
+    transaction_hash: `h${i}`, timestamp: i, horizon_link: '',
+  })
+
+  it('keeps the newest 500 alerts and drops the oldest when the cap is exceeded', () => {
+    for (let i = 1; i <= 501; i++) addAlert(makeAlert(i))
+    const alerts = getAlerts('CX', 'testnet')
+    expect(alerts).toHaveLength(500)
+    expect(alerts.some((a) => a.transaction_hash === 'h501')).toBe(true)
+    expect(alerts.some((a) => a.transaction_hash === 'h1')).toBe(false)
+  })
+})
+
 describe('seedMockAlerts', () => {
   it('uses the network Horizon host, 64-hex hashes, and chronological order', () => {
     seedMockAlerts('c1', 'futurenet', 3);
-    const alerts = getAlerts('c1');
+    const alerts = getAlerts('c1', 'futurenet');
     expect(alerts).toHaveLength(3);
     for (const a of alerts) {
       expect(a.transaction_hash).toMatch(/^[0-9a-f]{64}$/);
@@ -225,7 +281,7 @@ describe('seedMockAlerts', () => {
 
   it('respects the per-contract alert cap', () => {
     seedMockAlerts('c1', 'testnet', 600);
-    expect(getAlerts('c1')).toHaveLength(500);
+    expect(getAlerts('c1', 'testnet')).toHaveLength(500);
   });
 });
 
@@ -266,18 +322,12 @@ describe('corrupted storage', () => {
   });
 });
 
-describe('quota handling', () => {
-  const realSet = localStorageMock.setItem;
-  afterEach(() => { localStorageMock.setItem = realSet; });
-
-  function quotaError() {
-    const e = new Error('full');
-    e.name = 'QuotaExceededError';
-    return e;
-  }
+describe('alerts keyed by (contract_id, network)', () => {
+  const 
 
   it('returns false instead of throwing when storage always fails', () => {
     localStorageMock.setItem = () => { throw quotaError(); };
     expect(saveContract(contract1)).toBe(false);
   });
 });
+/* … truncated 1606 chars — edit only what you need near the top … */

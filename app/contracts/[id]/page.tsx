@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { WatchedContract, AlertPayload, AlertRule } from '@/types'
+import { WatchedContract, AlertPayload, AlertRule, isRuleEnabled } from '@/types'
 import { getContract, getAlerts } from '@/lib/storage'
 import { syncSaveContract, syncDeleteContract } from '@/lib/contractSync'
 import { getContract, deleteContract, getAlerts, saveContract, seedMockAlerts } from '@/lib/storage'
@@ -77,6 +77,14 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
     setContract(updated)
     setShowEditRules(false)
     trackEvent('rule_edit_saved', { contractId: params.id, ruleCount: editedRules.length })
+  }
+
+  function toggleRule(index: number) {
+    const rules = contract!.rules.map((r, i) => (i === index ? { ...r, enabled: !isRuleEnabled(r) } : r))
+    const updated = { ...contract!, rules }
+    void syncSaveContract(updated, false)
+    if (!saveContract(updated)) return
+    setContract(updated)
   }
 
   function hasUnsavedChanges(): boolean {
@@ -296,11 +304,25 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
         ) : (
           <div className="flex flex-wrap gap-2">
             {contract.rules.map((rule, i) => (
-              <div key={i} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2">
+              <div
+                key={i}
+                data-testid="active-rule"
+                className={`flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 ${isRuleEnabled(rule) ? '' : 'opacity-50'}`}
+              >
                 <AlertRuleBadge type={rule.type} />
                 {formatRuleSummary(rule) && (
                   <span className="text-xs font-mono text-zinc-400">{formatRuleSummary(rule)}</span>
                 )}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isRuleEnabled(rule)}
+                  aria-label={isRuleEnabled(rule) ? 'Disable rule' : 'Enable rule'}
+                  onClick={() => toggleRule(i)}
+                  className="text-xs text-zinc-400 hover:text-zinc-100"
+                >
+                  {isRuleEnabled(rule) ? 'On' : 'Off'}
+                </button>
               </div>
             ))}
           </div>

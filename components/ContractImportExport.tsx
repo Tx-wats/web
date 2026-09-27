@@ -24,7 +24,7 @@ export default function ContractImportExport() {
     a.href = url
     a.download = 'txwatch-contracts.json'
     a.click()
-    URL.revokeObjectURL(url)
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {

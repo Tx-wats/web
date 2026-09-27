@@ -1,10 +1,10 @@
 import Link from 'next/link'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { WatchedContract } from '@/types'
 import NetworkBadge from './NetworkBadge'
 import { getSyncStatuses } from '@/lib/contractSync'
 import { truncateId } from '@/lib/stellar'
-import { formatDate } from '@/lib/format'
+import { formatDate, formatRelativeTime } from '@/lib/format'
 
 interface ContractCardProps {
   contract: WatchedContract
@@ -26,25 +26,24 @@ export default function ContractCard({
   const hasWebhook = Boolean(contract.webhook_url)
   const sync = getSyncStatuses()[contract.id]
   const ref = useRef<HTMLAnchorElement>(null)
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     if (!highlight) return
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [highlight])
 
-  return (
-    <Link
-      ref={ref}
-      href={`/contracts/${contract.id}`}
-      className={`block bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-600 hover:bg-zinc-800/60 transition-all group ${
-        highlight ? 'ring-2 ring-indigo-500/40 motion-safe:animate-pulse' : ''
-      }`}
-    >
+  useEffect(() => {
+    if (!lastAlertTime) return
+    const interval = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(interval)
+  }, [lastAlertTime])
+
   const cardClassName = `block bg-zinc-900 border rounded-xl p-5 transition-all group ${
     selected
       ? 'border-indigo-500 ring-2 ring-indigo-500/40'
       : 'border-zinc-800 hover:border-zinc-600 hover:bg-zinc-800/60'
-  } ${active ? 'ring-2 ring-indigo-500/40 animate-pulse' : ''}`
+  } ${highlight ? 'ring-2 ring-indigo-500/40 motion-safe:animate-pulse' : ''}`
 
   const body = (
     <>
@@ -93,7 +92,15 @@ export default function ContractCard({
           {contract.rules.length === 1 ? 'rule' : 'rules'} active
         </span>
         {lastAlertTime ? (
-          <span>Last alert {formatDate(lastAlertTime)}</span>
+          <span>
+            Last alert{' '}
+            <time
+              dateTime={new Date(lastAlertTime).toISOString()}
+              title={formatDate(lastAlertTime)}
+            >
+              {formatRelativeTime(lastAlertTime, now)}
+            </time>
+          </span>
         ) : (
           <span>No alerts yet</span>
         )}
