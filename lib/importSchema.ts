@@ -1,4 +1,5 @@
-import type { AlertRule, AlertRuleType, Network, WatchedContract } from '@/types'
+import type { AlertRule, Network, WatchedContract } from '@/types'
+import { isAlertRuleType, parseAlertRule } from '@/types'
 import { isValidContractId, isValidUrl, isValidFunctionName } from '@/lib/stellar'
 
 /** Export file format, aligned with WatchedContract (uses contract_id, not address). */
@@ -20,13 +21,6 @@ export interface ImportParseResult {
 }
 
 const NETWORKS: Network[] = ['mainnet', 'testnet', 'futurenet']
-const RULE_TYPES: AlertRuleType[] = [
-  'LargeTransfer',
-  'AdminFunctionCalled',
-  'AnyTransaction',
-  'FunctionCalled',
-  'TransactionFailed',
-]
 
 /** Soroban symbols are limited to 32 characters. */
 const MAX_SYMBOL_LENGTH = 32
@@ -61,22 +55,22 @@ export function buildSnapshot(contracts: WatchedContract[]): ContractsSnapshot {
   }
 }
 
-function validateRule(rule: unknown): string | null {
+function validateRule(rule: unknown): AlertRule | string {
   if (typeof rule !== 'object' || rule === null) return 'rule must be an object'
-  const r = rule as AlertRule
-  if (!RULE_TYPES.includes(r.type)) return `unknown rule type "${String(r.type)}"`
-  if (r.threshold_xlm !== undefined && (typeof r.threshold_xlm !== 'number' || r.threshold_xlm < 0)) {
-    return 'threshold_xlm must be a non-negative number'
+  const type = (rule as { type?: unknown }).type
+  if (!isAlertRuleType(type)) return `unknown rule type "${String(type)}"`
+  const parsed = parseAlertRule(rule)
+  if (!parsed) {
+    if (type === 'LargeTransfer') return 'threshold_xlm must be a non-negative number'
+    if (type === 'AdminFunctionCalled') return 'function_names must be an array of strings'
+    return 'function_name must be a non-empty string'
   }
-  if (r.function_names !== undefined && !(Array.isArray(r.function_names) && r.function_names.every((n) => typeof n === 'string'))) {
-    return 'function_names must be an array of strings'
-  }
-  if (r.type === 'AdminFunctionCalled' && Array.isArray(r.function_names)) {
-    const normalized = normalizeFunctionNames(r.function_names)
+  if (parsed.type === 'AdminFunctionCalled') {
+    const normalized = normalizeFunctionNames(parsed.function_names)
     if (typeof normalized === 'string') return normalized
-    r.function_names = normalized
+    return { ...parsed, function_names: normalized }
   }
-  return null
+  return parsed
 }
 
 /** Returns a normalized contract or an error message for a single entry. */
@@ -87,9 +81,11 @@ export function validateContractEntry(entry: unknown): WatchedContract | string 
   if (!NETWORKS.includes(e.network as Network)) return 'invalid network'
   if (typeof e.webhook_url !== 'string' || !isValidUrl(e.webhook_url)) return 'invalid webhook_url'
   if (!Array.isArray(e.rules)) return 'rules must be an array'
+  const rules: AlertRule[] = []
   for (const rule of e.rules) {
-    const err = validateRule(rule)
-    if (err) return err
+    const result = validateRule(rule)
+    if (typeof result === 'string') return result
+    rules.push(result)
   }
   const now = Date.now()
   return {
@@ -97,7 +93,7 @@ export function validateContractEntry(entry: unknown): WatchedContract | string 
     label: typeof e.label === 'string' && e.label.trim() ? e.label : e.contract_id,
     contract_id: e.contract_id,
     network: e.network as Network,
-    rules: e.rules as AlertRule[],
+    rules,
     webhook_url: e.webhook_url,
     created_at: typeof e.created_at === 'number' ? e.created_at : now,
     updated_at: typeof e.updated_at === 'number' ? e.updated_at : now,
