@@ -80,3 +80,18 @@ export async function refreshContracts(): Promise<{ contracts: WatchedContract[]
     return { contracts: getContracts(), error: errMsg(e) }
   }
 }
+
+/**
+ * Subscribe to cross-tab contract changes. The callback fires whenever the
+ * contracts cache is written from another tab (or window) via the `storage`
+ * event, so detail pages can reload the contract or detect its deletion.
+ * Returns an unsubscribe function.
+ */
+export function onContractsChange(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  const handler = (e: StorageEvent) => {
+    if (e.key === null || e.key === CONTRACTS_KEY) callback()
+  }
+  window.addEventListener('storage', handler)
+  return () => window.removeEventListener('storage', handler)
+}
