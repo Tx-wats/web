@@ -1,4 +1,4 @@
-import { formatRuleSummary } from '@/lib/format'
+import { formatRuleSummary, formatDate } from '@/lib/format'
 import { AlertRule } from '@/types'
 
 describe('formatRuleSummary', () => {
@@ -79,6 +79,23 @@ describe('formatRuleSummary', () => {
   })
 })
 
+describe('ContractDetail last modified', () => {
+  const renderLastModified = (createdAt: string, updatedAt: string) => {
+    const showLastModified = updatedAt !== createdAt
+    return showLastModified ? `Last modified: ${formatDate(updatedAt)}` : null
+  }
+
+  it('shows the last modified time when updated_at differs from created_at', () => {
+    const created = '2024-01-01T00:00:00.000Z'
+    const updated = '2024-02-01T00:00:00.000Z'
+    expect(renderLastModified(created, updated)).toBe(
+      `Last modified: ${formatDate(updated)}`
+    )
+  })
+
+  it('hides the last modified row when updated_at equals created_at', () => {
+    const created = '2024-01-01T00:00:00.000Z'
+    expect(renderLastModified(created, created)).toBeNull()
 describe('metadata edit discard confirmation', () => {
   // Mirrors the in-app dialog flow that replaced window.confirm in
   // handleCancelMetadataEdit: the dialog resolves to a boolean and the
