@@ -57,8 +57,9 @@ export function formatRuleSummary(rule: AlertRule): string {
     case 'FunctionCalled':
       return rule.function_name || 'function'
     case 'AdminFunctionCalled':
-      return rule.function_names?.join(', ') || 'admin functions'
-    default:
+      return rule.function_names.join(', ') || 'admin functions'
+    case 'AnyTransaction':
+    case 'TransactionFailed':
       return ''
   }
 }
