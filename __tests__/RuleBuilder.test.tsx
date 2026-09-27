@@ -68,8 +68,8 @@ describe('RuleBuilder editing index integrity', () => {
     // Editing state should be cleared: no stale "Update Rule" button remains.
     expect(screen.queryByRole('button', { name: /update rule/i })).not.toBeInTheDocument();
     expect(screen.getAllByTestId('rule-item')).toHaveLength(1);
-import { render, screen, fireEvent } from '@testing-library/react';
-import RuleBuilder from '../components/RuleBuilder';
+  });
+});
 
 describe('RuleBuilder addRule immutability', () => {
   it('does not mutate the previous draft object when adding a rule', () => {
@@ -83,5 +83,43 @@ describe('RuleBuilder addRule immutability', () => {
     const previousNames = JSON.parse(previousDraft.textContent || '[]');
 
     expect(previousNames).toEqual([]);
+  });
+});
+
+describe('AlertRuleBadge tooltip accessibility', () => {
+  it('links the badge to the tooltip via aria-describedby and exposes role=tooltip', () => {
+    render(<RuleBuilder />);
+
+    const badge = screen.getByTestId('alert-rule-badge');
+    const tooltip = screen.getByRole('tooltip');
+
+    expect(badge).toHaveAttribute('aria-describedby', tooltip.id);
+    expect(tooltip).toHaveAttribute('id');
+  });
+
+  it('shows the tooltip on keyboard focus and hides it on blur', () => {
+    render(<RuleBuilder />);
+
+    const badge = screen.getByTestId('alert-rule-badge');
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+
+    fireEvent.focus(badge);
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+
+    fireEvent.blur(badge);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  it('toggles the tooltip on tap for touch users', () => {
+    render(<RuleBuilder />);
+
+    const badge = screen.getByTestId('alert-rule-badge');
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+
+    fireEvent.click(badge);
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+
+    fireEvent.click(badge);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 });

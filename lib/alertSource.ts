@@ -34,11 +34,19 @@ export async function fetchAlerts(
   return Array.isArray(body) ? body : body.alerts ?? []
 }
 
-export function alertKey(a: Pick<AlertPayload, 'transaction_hash' | 'rule_triggered'>): string {
-  return `${a.transaction_hash}::${a.rule_triggered}`
+/**
+ * Stable local key for an alert: tx hash + rule + timestamp.
+ * Used both for deduplication and for single-alert deletion, so every
+ * stored alert is uniquely identifiable even though the core payload
+ * carries no `id`.
+ */
+export function alertKey(
+  a: Pick<AlertPayload, 'transaction_hash' | 'rule_triggered' | 'timestamp'>
+): string {
+  return `${a.transaction_hash}::${a.rule_triggered}::${a.timestamp}`
 }
 
-/** Return the incoming alerts not already present, deduplicated by tx hash + rule. */
+/** Return the incoming alerts not already present, deduplicated by the stable key. */
 export function filterNewAlerts(
   existing: AlertPayload[],
   incoming: AlertPayload[]
@@ -52,6 +60,23 @@ export function filterNewAlerts(
     fresh.push(a)
   }
   return fresh
+}
+
+/**
+ * Parse the cached `txwatch_alerts` array once and return the latest alert
+ * timestamp per contract id. Avoids re-parsing the whole array for every card
+ * on every render (e.g. while typing in the search box).
+ */
+export function getLatestAlertTimestamps(): Record<string, number> {
+  const latest: Record<string, number> = {}
+  for (const alert of getAlerts()) {
+    const id = alert.contract_id
+    if (!id) continue
+    const ts = alert.timestamp
+    if (typeof ts !== 'number') continue
+    if (latest[id] === undefined || ts > latest[id]) latest[id] = ts
+  }
+  return latest
 }
 
 /**

@@ -8,7 +8,10 @@ import AlertPruner from '@/components/AlertPruner'
 import StorageBootstrap from '@/components/StorageBootstrap'
 
 export const metadata: Metadata = {
-  title: 'TxWatch — Soroban Contract Monitoring',
+  title: {
+    default: 'TxWatch — Soroban Contract Monitoring',
+    template: '%s — TxWatch',
+  },
   description: 'Real-time monitoring and alerts for Soroban smart contracts',
 }
 

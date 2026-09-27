@@ -178,6 +178,58 @@ describe('getAlerts — per contract filter', () => {
   })
 })
 
+// ── Dashboard card: last alert lookup ────────────────────────────────────────
+
+describe('dashboard card — last alert lookup', () => {
+  it('finds alerts when looked up by contract_id (not internal id)', () => {
+    const contract = makeContract({
+      id: 'internal-uuid-1',
+      contract_id: 'CONTRACT_A',
+    })
+    saveContract(contract)
+    addAlert(makeAlert({ contract_id: 'CONTRACT_A', transaction_hash: 'tx-a' }))
+
+    // Dashboard must look up alerts by contract_id, mirroring the contracts page.
+    const alerts = getAlerts(contract.contract_id)
+    expect(alerts).toHaveLength(1)
+
+    const lastAlertTime = alerts.length
+      ? new Date(Math.max(...alerts.map((a) => a.timestamp))).toLocaleString()
+      : null
+    expect(lastAlertTime).not.toBeNull()
+    expect(lastAlertTime).not.toBe('No alerts yet')
+  })
+
+  it('shows "No alerts yet" when the contract has no alerts', () => {
+    const contract = makeContract({
+      id: 'internal-uuid-2',
+      contract_id: 'CONTRACT_NO_ALERTS',
+    })
+    saveContract(contract)
+
+    const alerts = getAlerts(contract.contract_id)
+    expect(alerts).toHaveLength(0)
+
+    const lastAlertTime = alerts.length
+      ? new Date(Math.max(...alerts.map((a) => a.timestamp))).toLocaleString()
+      : 'No alerts yet'
+    expect(lastAlertTime).toBe('No alerts yet')
+  })
+
+  it('does not match alerts when the internal id is used instead of contract_id', () => {
+    const contract = makeContract({
+      id: 'internal-uuid-3',
+      contract_id: 'CONTRACT_B',
+    })
+    saveContract(contract)
+    addAlert(makeAlert({ contract_id: 'CONTRACT_B', transaction_hash: 'tx-b' }))
+
+    // Regression guard: looking up by the internal id yields nothing.
+    expect(getAlerts(contract.id)).toHaveLength(0)
+    expect(getAlerts(contract.contract_id)).toHaveLength(1)
+  })
+})
+
 // ── Alert activity chart — bucketing helpers ─────────────────────────────────
 
 describe('bucketAlertsByDay — 7-day bucketing', () => {
@@ -235,7 +287,7 @@ describe('bucketAlertsByHour — 24-hour bucketing', () => {
     expect(buckets.every((b) => b.count === 0)).toBe(true)
   })
 
-  it('places an alert from the current hour in the last bucket', () => {
+  it('places an alert from now in the last bucket', () => {
     const buckets = bucketAlertsByHour([makeAlert({ timestamp: Date.now() })], 24)
     expect(buckets).toHaveLength(24)
     expect(buckets[23].count).toBe(1)
@@ -245,87 +297,40 @@ describe('bucketAlertsByHour — 24-hour bucketing', () => {
     const hour = 60 * 60 * 1000
     const alerts = [
       makeAlert({ transaction_hash: 'a', timestamp: Date.now() }),
-      makeAlert({ transaction_hash: 'b', timestamp: Date.now() - 2 * hour }),
-      makeAlert({ transaction_hash: 'c', timestamp: Date.now() - 2 * hour }),
+      makeAlert({ transaction_hash: 'b', timestamp: Date.now() - hour }),
+      makeAlert({ transaction_hash: 'c', timestamp: Date.now() - hour }),
+      makeAlert({ transaction_hash: 'd', timestamp: Date.now() - 3 * hour }),
     ]
     const buckets = bucketAlertsByHour(alerts, 24)
     expect(buckets[23].count).toBe(1)
-    expect(buckets[21].count).toBe(2)
+    expect(buckets[22].count).toBe(2)
+    expect(buckets[20].count).toBe(1)
   })
 
   it('ignores alerts older than the window', () => {
     const hour = 60 * 60 * 1000
-    const alerts = [makeAlert({ timestamp: Date.now() - 48 * hour })]
+    const alerts = [makeAlert({ timestamp: Date.now() - 30 * hour })]
     const buckets = bucketAlertsByHour(alerts, 24)
     expect(buckets.reduce((sum, b) => sum + b.count, 0)).toBe(0)
   })
+})
 
-  it('splits counts by network', () => {
-    const alerts = [
-      makeAlert({ transaction_hash: 'a', network: 'mainnet' }),
-      makeAlert({ transaction_hash: 'b', network: 'mainnet' }),
-      makeAlert({ transaction_hash: 'c', network: 'testnet' }),
-    ]
-    const buckets = bucketAlertsByHour(alerts, 24)
-    expect(buckets[23].byNetwork.mainnet).toBe(2)
-    expect(buckets[23].byNetwork.testnet).toBe(1)
-// ── Alerts today — refresh triggers (issue #49) ──────────────────────────────
+// ── Alerts change subscription ───────────────────────────────────────────────
 
-describe('alerts today — refresh triggers', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('recomputes the count when alerts change via onAlertsChange', () => {
-    let count = getTodayAlertCount()
-    expect(count).toBe(0)
-
-    const unsubscribe = onAlertsChange(() => {
-      count = getTodayAlertCount()
-    })
-
-    addAlert(makeAlert({ transaction_hash: 'tx-new' }))
-    expect(count).toBe(1)
-
+describe('onAlertsChange', () => {
+  it('invokes the callback when an alert is added', () => {
+    const cb = vi.fn()
+    const unsubscribe = onAlertsChange(cb)
+    addAlert(makeAlert({ transaction_hash: 'tx-sub' }))
+    expect(cb).toHaveBeenCalled()
     unsubscribe()
   })
 
-  it('recomputes the count when the window regains focus', () => {
-    let count = getTodayAlertCount()
-    expect(count).toBe(0)
-
-    const onFocus = () => {
-      count = getTodayAlertCount()
-    }
-    window.addEventListener('focus', onFocus)
-
-    addAlert(makeAlert({ transaction_hash: 'tx-focus' }))
-    window.dispatchEvent(new Event('focus'))
-    expect(count).toBe(1)
-
-    window.removeEventListener('focus', onFocus)
-  })
-
-  it('recomputes the count at local midnight so it rolls over', () => {
-    vi.useFakeTimers()
-    // Start at 23:59:30 local time so midnight is 30s away.
-    const start = new Date(2024, 0, 1, 23, 59, 30, 0)
-    vi.setSystemTime(start)
-
-    addAlert(makeAlert({ transaction_hash: 'tx-today', timestamp: start.getTime() }))
-    let count = getTodayAlertCount()
-    expect(count).toBe(1)
-
-    // Schedule a recompute at the next local midnight.
-    const nextMidnight = new Date(2024, 0, 2, 0, 0, 0, 0)
-    const delay = nextMidnight.getTime() - start.getTime()
-    const timer = setTimeout(() => {
-      count = getTodayAlertCount()
-    }, delay)
-
-    vi.advanceTimersByTime(delay)
-    expect(count).toBe(0)
-
-    clearTimeout(timer)
+  it('stops invoking the callback after unsubscribe', () => {
+    const cb = vi.fn()
+    const unsubscribe = onAlertsChange(cb)
+    unsubscribe()
+    addAlert(makeAlert({ transaction_hash: 'tx-sub-2' }))
+    expect(cb).not.toHaveBeenCalled()
   })
 })

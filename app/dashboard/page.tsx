@@ -112,7 +112,7 @@ export default function DashboardPage() {
     setAlertsToday(getTodayAlertCount())
     const collected: Alert[] = []
     for (const contract of contracts) {
-      collected.push(...getAlerts(contract.id))
+      collected.push(...getAlerts(contract.contract_id))
     }
     setAllAlerts(collected)
     setMounted(true)
@@ -127,7 +127,6 @@ export default function DashboardPage() {
     () => bucketAlerts(allAlerts, now, HOUR_MS, 24),
     [allAlerts, now]
   )
-  }, [])
 
   useEffect(() => {
     refreshAlertsToday()
@@ -177,8 +176,8 @@ export default function DashboardPage() {
   if (!mounted) return <DashboardSkeleton />
   // Sort by most recent alert (descending), then by label (ascending).
   const sortedContracts = [...contracts].sort((a, b) => {
-    const aAlert = lastAlertTime(a.id) ?? 0
-    const bAlert = lastAlertTime(b.id) ?? 0
+    const aAlert = lastAlertTime(a.contract_id) ?? 0
+    const bAlert = lastAlertTime(b.contract_id) ?? 0
     if (bAlert !== aAlert) return bAlert - aAlert
     return a.label.localeCompare(b.label)
   })
@@ -225,16 +224,13 @@ export default function DashboardPage() {
           <div className="mt-4 space-y-2">
             {networkSummary.length > 0 ? (
               networkSummary.map(({ network, count }) => (
-                <div key={network} className="flex items-center justify-between rounded-full bg-zinc-950/70 px-3 py-2 text-sm text-zinc-300">
-                  <span className="inline-flex items-center gap-2">
-                    <NetworkBadge network={network} />
-                    {network.charAt(0).toUpperCase() + network.slice(1)}
-                  </span>
-                  <span className="font-semibold text-zinc-100">{count}</span>
+                <div key={network} className="flex items-center justify-between">
+                  <NetworkBadge network={network} />
+                  <span className="text-xs text-zinc-400">{count}</span>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-zinc-500 mt-2">No networks configured yet.</p>
+              <p className="text-xs text-zinc-600">No networks yet</p>
             )}
           </div>
         </Link>
@@ -242,43 +238,36 @@ export default function DashboardPage() {
 
       {/* Alert activity charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <AlertActivityChart title="Alerts — last 7 days" buckets={dailyBuckets} />
-        <AlertActivityChart title="Alerts — last 24 hours" buckets={hourlyBuckets} />
+        <AlertActivityChart title="Alerts (last 7 days)" buckets={dailyBuckets} />
+        <AlertActivityChart title="Alerts (last 24 hours)" buckets={hourlyBuckets} />
       </div>
 
-      {/* Contract list */}
-      {contracts.length === 0 ? (
-        <EmptyState
-          title="No contracts registered"
-          description="Add your first Soroban contract to start monitoring transactions and receiving alerts."
-          action={
-            <Link
-              href="/contracts/new"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-medium text-white transition-colors"
-            >
-              Add Contract
-            </Link>
-          }
-        />
-      ) : (
-        <div className="space-y-4">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {visibleContracts.map((c) => (
-              <ContractCard key={c.id} contract={c} lastAlertTime={lastAlertTime(c.id)} />
-            ))}
-          </div>
+      {/* Contract cards */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-zinc-100">Contracts</h2>
           {hasMoreContracts && (
-            <div className="flex justify-center">
-              <Link
-                href="/contracts"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm font-medium text-zinc-300 transition-colors"
-              >
-                View all contracts
-              </Link>
-            </div>
+            <Link href="/contracts" className="text-sm text-indigo-400 hover:text-indigo-300">
+              View all {sortedContracts.length}
+            </Link>
           )}
         </div>
-      )}
+
+        {visibleContracts.length === 0 ? (
+          <EmptyState
+            title="No contracts yet"
+            description="Add your first Soroban contract to start monitoring events and alerts."
+            actionLabel="Add Contract"
+            actionHref="/contracts/new"
+          />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {visibleContracts.map((c) => (
+              <ContractCard key={c.id} contract={c} lastAlertTime={lastAlertTime(c.contract_id)} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
