@@ -56,6 +56,22 @@ export function explorerContractUrl(network: Network, contractId: string): strin
   return `${STELLAR_EXPERT_BASE}/${net}/contract/${contractId}`
 }
 
+/**
+ * Resolve the network to use for explorer links. Prefers the alert's own
+ * network when it is a valid Network, otherwise falls back to the contract's
+ * network prop.
+ */
+export function resolveExplorerNetwork(
+  alertNetwork: string | undefined,
+  fallback: Network
+): Network {
+  return isNetwork(alertNetwork) ? alertNetwork : fallback
+}
+
+export function isNetwork(value: string | undefined): value is Network {
+  return value === 'mainnet' || value === 'testnet' || value === 'futurenet'
+}
+
 export function truncateId(id: string, chars = 8): string {
   if (id.length <= chars * 2 + 3) return id
   return `${id.slice(0, chars)}...${id.slice(-chars)}`

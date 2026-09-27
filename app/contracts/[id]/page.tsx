@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { WatchedContract, AlertPayload, AlertRule } from '@/types'
+import { WatchedContract, AlertPayload, AlertRule, isRuleEnabled } from '@/types'
 import { getContract, getAlerts } from '@/lib/storage'
 import { syncSaveContract, syncDeleteContract } from '@/lib/contractSync'
 import { getContract, deleteContract, getAlerts, saveContract, seedMockAlerts } from '@/lib/storage'
@@ -79,6 +79,14 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
     setContract(updated)
     setShowEditRules(false)
     trackEvent('rule_edit_saved', { contractId: params.id, ruleCount: editedRules.length })
+  }
+
+  function toggleRule(index: number) {
+    const rules = contract!.rules.map((r, i) => (i === index ? { ...r, enabled: !isRuleEnabled(r) } : r))
+    const updated = { ...contract!, rules }
+    void syncSaveContract(updated, false)
+    if (!saveContract(updated)) return
+    setContract(updated)
   }
 
   function hasUnsavedChanges(): boolean {
@@ -241,6 +249,113 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
           >
             Edit Details
           </button>
+          <button
+            onClick={openEditRules}
+            className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+          >
+            Edit Rules
+          </button>
+          {process.env.NODE_ENV !== 'production' && (
+            <button
+              onClick={() => {
+                seedMockAlerts(params.id, contract.network)
+                setAlerts(getAlerts(params.id))
+              }}
+              className="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+            >
+              Seed mock alerts
+            </button>
+          )}
+          <button
+            onClick={() => setShowDelete(true)}
+            className="px-3 py-1.5 rounded-lg border border-red-800 hover:border-red-600 text-sm text-red-400 hover:text-red-300 transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+
+      {/* Metadata */}
+      <div className="grid sm:grid-cols-3 gap-4">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-zinc-500">Webhook URL</p>
+            <CopyButton text={contract.webhook_url} />
+          </div>
+          <a
+            href={contract.webhook_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors break-all"
+          >
+            {contract.webhook_url}
+          </a>
+        </div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+          <p className="text-xs text-zinc-500 mb-1">Registered</p>
+          <p className="text-sm text-zinc-300">{formatDate(contract.created_at)}</p>
+          <p className="text-xs text-zinc-500 mt-1">{new Date(contract.created_at).toLocaleTimeString()}</p>
+        </div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+          <p className="text-xs text-zinc-500 mb-1">{alerts.length === 0 ? 'Total Alerts' : 'Last Alert'}</p>
+          {sync.enabled && <NotificationToggle />}
+          {sync.enabled && (
+            <p className="text-xs text-zinc-500 mb-1" data-testid="sync-status">
+              <span className={sync.live ? 'text-green-400' : 'text-zinc-500'}>
+                {sync.live ? 'Live' : 'Offline'}
+              </span>
+              {sync.lastSync ? ` · synced ${new Date(sync.lastSync).toLocaleTimeString()}` : ''}
+            </p>
+          )}
+          {alerts.length === 0 ? (
+            <p className="text-sm text-zinc-300">No alerts yet</p>
+          ) : (
+            <>
+              <p className="text-sm text-zinc-300">{formatDate(alerts[0].timestamp)}</p>
+              <p className="text-xs text-zinc-500 mt-1">{new Date(alerts[0].timestamp).toLocaleTimeString()}</p>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Active Rules */}
+      <div>
+        <h2 className="text-lg font-semibold text-zinc-100 mb-3">Active Rules</h2>
+        {contract.rules.length === 0 ? (
+          <p className="text-sm text-zinc-500">No rules configured.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {contract.rules.map((rule, i) => (
+              <div
+                key={i}
+                data-testid="active-rule"
+                className={`flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 ${isRuleEnabled(rule) ? '' : 'opacity-50'}`}
+              >
+                <AlertRuleBadge type={rule.type} />
+                {formatRuleSummary(rule) && (
+                  <span className="text-xs font-mono text-zinc-400">{formatRuleSummary(rule)}</span>
+                )}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isRuleEnabled(rule)}
+                  aria-label={isRuleEnabled(rule) ? 'Disable rule' : 'Enable rule'}
+                  onClick={() => toggleRule(i)}
+                  className="text-xs text-zinc-400 hover:text-zinc-100"
+                >
+                  {isRuleEnabled(rule) ? 'On' : 'Off'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Alert History */}
+      <div>
+        <h2 className="text-lg font-semibold text-zinc-100 mb-3">Alert History</h2>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <WebhookLog alerts={alerts} network={contract.network} />
         </div>
       </div>
 

@@ -44,6 +44,37 @@ export function formatDateTime(timestamp: number): string {
   return new Date(timestamp).toLocaleString()
 }
 
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 365 * 24 * 60 * 60 * 1000],
+  ['month', 30 * 24 * 60 * 60 * 1000],
+  ['week', 7 * 24 * 60 * 60 * 1000],
+  ['day', 24 * 60 * 60 * 1000],
+  ['hour', 60 * 60 * 1000],
+  ['minute', 60 * 1000],
+  ['second', 1000],
+]
+
+/**
+ * Formats a Unix ms timestamp as a relative time string (e.g. "3 minutes ago").
+ * Uses Intl.RelativeTimeFormat for locale-aware output.
+ */
+export function formatRelativeTime(
+  timestamp: number,
+  now: number = Date.now(),
+): string {
+  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+  const diff = timestamp - now
+  const absDiff = Math.abs(diff)
+
+  for (const [unit, ms] of RELATIVE_UNITS) {
+    if (absDiff >= ms || unit === 'second') {
+      return formatter.format(Math.round(diff / ms), unit)
+    }
+  }
+
+  return formatter.format(0, 'second')
+}
+
 /**
  * Masks a webhook URL so embedded secrets (Slack/Discord tokens, ?key= params)
  * are not shown in plain text. Keeps the origin and the start of the path, and
@@ -85,8 +116,9 @@ export function formatRuleSummary(rule: AlertRule): string {
     case 'FunctionCalled':
       return rule.function_name || 'function'
     case 'AdminFunctionCalled':
-      return rule.function_names?.join(', ') || 'admin functions'
-    default:
+      return rule.function_names.join(', ') || 'admin functions'
+    case 'AnyTransaction':
+    case 'TransactionFailed':
       return ''
   }
 }

@@ -52,6 +52,36 @@ describe('WebhookLogCard', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
+  it('links to the mainnet explorer by default', () => {
+    const hash = 'abc123def456';
+    render(<WebhookLogCard entry={{ ...base, txHash: hash }} />);
+    const link = screen.getByRole('link', { name: /View transaction/ });
+    expect(link).toHaveAttribute(
+      'href',
+      `https://stellar.expert/explorer/public/tx/${hash}`,
+    );
+  });
+
+  it('links to the testnet explorer when network is testnet', () => {
+    const hash = 'abc123def456';
+    render(<WebhookLogCard entry={{ ...base, txHash: hash }} network="testnet" />);
+    const link = screen.getByRole('link', { name: /View transaction/ });
+    expect(link).toHaveAttribute(
+      'href',
+      `https://stellar.expert/explorer/testnet/tx/${hash}`,
+    );
+  });
+
+  it('links to the futurenet explorer when network is futurenet', () => {
+    const hash = 'abc123def456';
+    render(<WebhookLogCard entry={{ ...base, txHash: hash }} network="futurenet" />);
+    const link = screen.getByRole('link', { name: /View transaction/ });
+    expect(link).toHaveAttribute(
+      'href',
+      `https://stellar.expert/explorer/futurenet/tx/${hash}`,
+    );
+  });
+
   it('omits tx section when txHash not provided', () => {
     render(<WebhookLogCard entry={base} />);
     expect(screen.queryByRole('link')).not.toBeInTheDocument();

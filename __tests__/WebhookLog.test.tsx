@@ -1,10 +1,12 @@
 import { vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import WebhookLog from '@/components/WebhookLog'
 import { AlertPayload } from '@/types'
 
+const explorerTxUrl = vi.fn((network: string, hash: string) => `https://stellar.expert/explorer/${network}/tx/${hash}`)
+
 vi.mock('@/lib/stellar', () => ({
-  explorerTxUrl: (_network: string, hash: string) => `https://stellar.expert/explorer/testnet/tx/${hash}`,
+  explorerTxUrl: (network: string, hash: string) => explorerTxUrl(network, hash),
   // WebhookLog also calls truncateId; omitting it made every render throw.
   truncateId: (id: string, chars = 8) =>
     id.length <= chars * 2 + 3 ? id : `${id.slice(0, chars)}...${id.slice(-chars)}`,
@@ -21,6 +23,10 @@ const baseAlert: AlertPayload = {
 }
 
 describe('WebhookLog', () => {
+  beforeEach(() => {
+    explorerTxUrl.mockClear()
+  })
+
   it('renders empty state when there are no alerts', () => {
     render(<WebhookLog alerts={[]} network="testnet" />)
     expect(screen.getByText('No alerts yet')).toBeInTheDocument()
@@ -33,9 +39,31 @@ describe('WebhookLog', () => {
 
   it('renders explorer link with shortened tx hash', () => {
     render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
-    const link = screen.getByRole('link')
+    const link = screen.getByRole('link', { name: /abcdef12/ })
     expect(link).toHaveAttribute('href', expect.stringContaining(baseAlert.transaction_hash))
     expect(link).toHaveAttribute('target', '_blank')
+  })
+
+  it('prefers the alert network over the contract network prop', () => {
+    render(<WebhookLog alerts={[{ ...baseAlert, network: 'mainnet' }]} network="testnet" />)
+    expect(explorerTxUrl).toHaveBeenCalledWith('mainnet', baseAlert.transaction_hash)
+  })
+
+  it('falls back to the contract network prop when alert network is invalid', () => {
+    render(<WebhookLog alerts={[{ ...baseAlert, network: 'not-a-network' as AlertPayload['network'] }]} network="testnet" />)
+    expect(explorerTxUrl).toHaveBeenCalledWith('testnet', baseAlert.transaction_hash)
+  })
+
+  it('renders a secondary Horizon link when horizon_link is provided', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    const horizon = screen.getByRole('link', { name: /horizon/i })
+    expect(horizon).toHaveAttribute('href', baseAlert.horizon_link)
+    expect(horizon).toHaveAttribute('target', '_blank')
+  })
+
+  it('does not render a Horizon link when horizon_link is missing', () => {
+    render(<WebhookLog alerts={[{ ...baseAlert, horizon_link: undefined }]} network="testnet" />)
+    expect(screen.queryByRole('link', { name: /horizon/i })).not.toBeInTheDocument()
   })
 
   it('renders timestamp', () => {
@@ -72,5 +100,34 @@ describe('WebhookLog', () => {
     render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
     const copyBtn = screen.getByTitle('Copy to clipboard')
     expect(copyBtn).toBeInTheDocument()
+  })
+
+  it('opens the alert detail drawer when a row is clicked', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    fireEvent.click(screen.getByText('Large Transfer'))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText(/Test Contract/)).toBeInTheDocument()
+  })
+
+  it('shows the full payload JSON in the drawer', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    fireEvent.click(screen.getByText('Large Transfer'))
+    expect(screen.getByText(/horizon_link/)).toBeInTheDocument()
+    expect(screen.getByText(/rule_triggered/)).toBeInTheDocument()
+  })
+
+  it('renders Copy JSON and Open in explorer actions in the drawer', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    fireEvent.click(screen.getByText('Large Transfer'))
+    expect(screen.getByText('Copy JSON')).toBeInTheDocument()
+    expect(screen.getByText('Open in explorer')).toBeInTheDocument()
+  })
+
+  it('closes the drawer when Escape is pressed', () => {
+    render(<WebhookLog alerts={[baseAlert]} network="testnet" />)
+    fireEvent.click(screen.getByText('Large Transfer'))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
