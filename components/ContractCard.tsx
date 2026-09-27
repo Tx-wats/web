@@ -26,6 +26,7 @@ export default function ContractCard({
   const hasWebhook = Boolean(contract.webhook_url)
   const sync = getSyncStatuses()[contract.id]
   const ref = useRef<HTMLAnchorElement>(null)
+  const paused = contract.enabled === false
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -68,7 +69,14 @@ export default function ContractCard({
             </p>
           </div>
         </div>
-        <NetworkBadge network={contract.network} />
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {paused && (
+            <span className="text-xs px-2 py-0.5 rounded-md bg-zinc-500/15 text-zinc-400 border border-zinc-500/20">
+              Paused
+            </span>
+          )}
+          <NetworkBadge network={contract.network} />
+        </div>
         {sync && (
           <span className={sync.state === 'error' ? 'text-xs text-red-400' : 'text-xs text-emerald-400'} title={sync.error}>
             {sync.state === 'error' ? 'Sync failed' : 'Synced'}
