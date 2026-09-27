@@ -14,6 +14,7 @@ import { useFreighterConnection } from '@/lib/useFreighterConnection'
 import RuleBuilder from '@/components/RuleBuilder'
 import FreighterConnect from '@/components/FreighterConnect'
 import Toast from '@/components/Toast'
+import WebhookTestButton from '@/components/WebhookTestButton'
 
 interface FormErrors {
   label?: string
@@ -36,13 +37,7 @@ export default function NewContractPage() {
   const [rules, setRules] = useState<AlertRule[]>([])
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
-  const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'ok' | 'error'>('idle')
-  const [testError, setTestError] = useState<string | null>(null)
-  const [testStatusCode, setTestStatusCode] = useState<number | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-  const testAbortRef = useRef<AbortController | null>(null)
-
-  useEffect(() => () => testAbortRef.current?.abort(), [])
 
   // Pre-fill from a "Duplicate Contract" action. Data is passed via
   // sessionStorage (never the URL) so the webhook URL is not leaked.
@@ -166,39 +161,6 @@ export default function NewContractPage() {
     }, 1500)
   }
 
-  async function handleTestWebhook() {
-    const trimmedWebhookUrl = webhookUrl.trim()
-    if (!trimmedWebhookUrl || !isValidUrl(trimmedWebhookUrl)) {
-      setErrors((e) => ({ ...e, webhook_url: 'Enter a valid URL to test' }))
-      return
-    }
-    testAbortRef.current?.abort()
-    const controller = new AbortController()
-    testAbortRef.current = controller
-    const trimmedContractId = contractId.trim()
-    if (!trimmedContractId || !isValidContractId(trimmedContractId)) {
-      setErrors((e) => ({ ...e, contract_id: 'Enter a valid contract ID before testing' }))
-      return
-    }
-    setTestStatus('sending')
-    setTestError(null)
-    setTestStatusCode(null)
-    try {
-      const { status, ok } = await sendTestWebhook(trimmedWebhookUrl, trimmedContractId, network, controller.signal, webhookSecret || undefined)
-      setTestStatusCode(status)
-      if (ok) {
-        setTestStatus('ok')
-      } else {
-        setTestStatus('error')
-        setTestError(`Server responded with ${status}`)
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') return
-      setTestStatus('error')
-      setTestError(err instanceof Error ? err.message : 'Request failed')
-    }
-  }
-
   return (
     <>
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
@@ -261,6 +223,7 @@ export default function NewContractPage() {
           <label className="block text-sm font-medium text-zinc-300 mb-1.5">Webhook URL</label>
           <input
             type="url"
+            type="text"
             placeholder="https://example.com/webhook"
             value={webhookUrl}
             onChange={(e) => { setWebhookUrl(e.target.value); setErrors((prev) => ({ ...prev, webhook_url: undefined })) }}
@@ -301,9 +264,18 @@ export default function NewContractPage() {
           >
             {testStatus === 'sending' ? 'Testing…' : 'Test Webhook'}
           </button>
+          <WebhookTestButton
+            webhookUrl={webhookUrl}
+            contractId={contractId}
+            network={network}
+            webhookSecret={webhookSecret}
+            onError={(field, message) => setErrors((prev) => ({ ...prev, [field]: message }))}
+            className="mt-2"
+          />
         </div>
         {testStatus === 'ok' && <p className="text-xs text-emerald-400">Webhook delivered successfully.</p>}
         {testStatus === 'error' && <p className="text-xs text-red-400">{testError}</p>}
+      </div>
       </div>
       </div>
     </>

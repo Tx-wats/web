@@ -28,6 +28,53 @@ export type AlertActivityRange = "24h" | "7d";
 
 export type AlertGroupBy = "network" | "ruleType";
 
+/**
+ * A watched contract as persisted by the dashboard.
+ *
+ * `enabled` mirrors the `enabled`/`paused` flag coordinated with
+ * `tx-watch-core` (see CONTRIBUTING: types must stay in sync). It defaults to
+ * `true` so existing records keep monitoring after the storage migration.
+ */
+export interface WatchedContract {
+  id: string;
+  address: string;
+  network?: string;
+  label?: string;
+  webhookUrl?: string;
+  enabled: boolean;
+  createdAt?: string | Date;
+}
+
+/**
+ * Storage migration: backfills `enabled: true` on contracts persisted before
+ * the pause/resume flag existed. Idempotent and pure so it can run on load
+ * and be unit tested.
+ */
+export function migrateWatchedContracts(
+  contracts: Array<Partial<WatchedContract> & { id: string; address: string }>,
+): WatchedContract[] {
+  return contracts.map((contract) => ({
+    ...contract,
+    enabled: contract.enabled ?? true,
+  }));
+}
+
+/**
+ * A contract is paused when it is explicitly disabled. Missing values are
+ * treated as enabled to stay consistent with the migration default.
+ */
+export function isContractPaused(contract: Pick<WatchedContract, "enabled">): boolean {
+  return contract.enabled === false;
+}
+
+/**
+ * Counts contracts whose webhooks are actively delivering alerts. Paused
+ * contracts are excluded from the "Active Webhooks" dashboard stat.
+ */
+export function countActiveWebhooks(contracts: WatchedContract[]): number {
+  return contracts.filter((contract) => !isContractPaused(contract)).length;
+}
+
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
