@@ -7,9 +7,15 @@ const WALLET_STORAGE_KEY = 'freighter_public_key'
 interface FreighterConnectProps {
   className?: string
   onConnect?: (publicKey: string) => void
+  /** Fired when the user disconnects from this page. */
+  onDisconnect?: () => void
 }
 
-export default function FreighterConnect({ onConnect, className = '' }: FreighterConnectProps) {
+export default function FreighterConnect({
+  onConnect,
+  onDisconnect,
+  className = '',
+}: FreighterConnectProps) {
   const [publicKey, setPublicKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -78,6 +84,7 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
   function disconnect() {
     setPublicKey(null)
     localStorage.removeItem(WALLET_STORAGE_KEY)
+    onDisconnect?.()
   }
 
   if (isInitializing) {

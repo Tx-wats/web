@@ -11,6 +11,7 @@ import { sendTestWebhook } from '@/lib/api'
 import { generateWebhookSecret } from '@/lib/webhookSignature'
 import CopyButton from '@/components/CopyButton'
 import { useFreighterConnection } from '@/lib/useFreighterConnection'
+import { useNetworkMismatchWarning } from '@/lib/useNetworkMismatchWarning'
 import RuleBuilder from '@/components/RuleBuilder'
 import FreighterConnect from '@/components/FreighterConnect'
 import Toast from '@/components/Toast'
@@ -28,7 +29,6 @@ interface FormErrors {
 export default function NewContractPage() {
   const router = useRouter()
   const { isConnected } = useFreighterConnection()
-  const [networkWarning, setNetworkWarning] = useState<string | null>(null)
   const [label, setLabel] = useState('')
   const [contractId, setContractId] = useState('')
   const [network, setNetwork] = useState<Network>('testnet')
@@ -38,6 +38,11 @@ export default function NewContractPage() {
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Warns on mount, on network change, and after connecting, not only when the
+  // network <select> changes.
+  const { networkWarning, checkNetworkMismatch, clearNetworkWarning } =
+    useNetworkMismatchWarning(network, isConnected)
 
   // Pre-fill from a "Duplicate Contract" action. Data is passed via
   // sessionStorage (never the URL) so the webhook URL is not leaked.
@@ -66,6 +71,12 @@ export default function NewContractPage() {
 
   function handleWalletConnect() {
     setErrors((prev) => ({ ...prev, wallet: undefined }))
+    // The wallet's network is only knowable once it is connected.
+    void checkNetworkMismatch()
+  }
+
+  function handleWalletDisconnect() {
+    clearNetworkWarning()
   }
 
   function validate(): FormErrors {
@@ -100,28 +111,6 @@ export default function NewContractPage() {
       isValidUrl(webhookUrl.trim()) &&
       rules.length > 0
     )
-  }
-
-  async function checkNetworkMismatch(selectedNetwork: Network) {
-    if (!window.freighter) return
-    try {
-      const walletNetwork = await window.freighter.getNetwork()
-      const networkMap: Record<string, string> = {
-        testnet: 'TESTNET',
-        mainnet: 'PUBLIC',
-        futurenet: 'FUTURENET',
-      }
-      const expectedNetwork = networkMap[selectedNetwork]
-      if (walletNetwork !== expectedNetwork) {
-        setNetworkWarning(
-          `Your wallet is on ${walletNetwork}, but this contract is on ${selectedNetwork.toUpperCase()}`
-        )
-      } else {
-        setNetworkWarning(null)
-      }
-    } catch {
-      setNetworkWarning(null)
-    }
   }
 
   async function handleSave() {
@@ -208,7 +197,7 @@ export default function NewContractPage() {
           <label className="block text-sm font-medium text-zinc-300 mb-1.5">Network</label>
           <select
             value={network}
-            onChange={(e) => { const n = e.target.value as Network; setNetwork(n); checkNetworkMismatch(n) }}
+            onChange={(e) => setNetwork(e.target.value as Network)}
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 transition-colors"
           >
             <option value="testnet">Testnet</option>
@@ -242,7 +231,7 @@ export default function NewContractPage() {
         {/* Wallet */}
         {!isConnected && (
           <div>
-            <FreighterConnect onConnect={handleWalletConnect} />
+            <FreighterConnect onConnect={handleWalletConnect} onDisconnect={handleWalletDisconnect} />
             {errors.wallet && <p className="text-xs text-red-400 mt-1">{errors.wallet}</p>}
           </div>
         )}
