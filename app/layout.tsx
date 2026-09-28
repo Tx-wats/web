@@ -4,6 +4,7 @@ import Link from 'next/link'
 import FreighterConnect from '@/components/FreighterConnect'
 import WalletStatusBadge from '@/components/WalletStatusBadge'
 import MobileNav from '@/components/MobileNav'
+import NavLink from '@/components/NavLink'
 import AlertPruner from '@/components/AlertPruner'
 import StorageBootstrap from '@/components/StorageBootstrap'
 import { links } from '@/lib/links'
@@ -30,15 +31,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="text-zinc-100">TxWatch</span>
             </Link>
 
-            <nav className="hidden sm:flex items-center gap-6 text-sm text-zinc-400">
-              <Link href="/dashboard" className="hover:text-zinc-100 transition-colors">Dashboard</Link>
-              <Link href="/contracts" className="hover:text-zinc-100 transition-colors">Contracts</Link>
-              <Link href="/settings" className="hover:text-zinc-100 transition-colors">Settings</Link>
+            <nav className="hidden sm:flex items-center gap-6 text-sm">
+              <NavLink href="/dashboard" exact>Dashboard</NavLink>
+              <NavLink href="/contracts">Contracts</NavLink>
+              <NavLink href="/settings" exact>Settings</NavLink>
               <a
                 href={links.org}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-zinc-100 transition-colors"
+                className="text-zinc-400 hover:text-zinc-100 transition-colors"
               >
                 GitHub
               </a>
