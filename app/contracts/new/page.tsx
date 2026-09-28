@@ -10,6 +10,7 @@ import { addContract, getContracts } from '@/lib/storage'
 import { sendTestWebhook } from '@/lib/api'
 import { generateWebhookSecret } from '@/lib/webhookSignature'
 import CopyButton from '@/components/CopyButton'
+import ContractVerification from '@/components/ContractVerification'
 import { useFreighterConnection } from '@/lib/useFreighterConnection'
 import RuleBuilder from '@/components/RuleBuilder'
 import FreighterConnect from '@/components/FreighterConnect'
@@ -201,6 +202,7 @@ export default function NewContractPage() {
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors font-mono"
           />
           {errors.contract_id && <p className="text-xs text-red-400 mt-1">{errors.contract_id}</p>}
+          <ContractVerification network={network} contractId={contractId} className="mt-1" />
         </div>
 
         {/* Network */}
