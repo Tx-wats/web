@@ -54,4 +54,39 @@ describe('useSortedLog', () => {
     const { result } = renderHook(() => useSortedLog(bad));
     expect(() => result.current.sortedEntries).not.toThrow();
   });
+
+  it('sinks invalid timestamps to the end in descending order', () => {
+    // invalid entry in the middle — valid entries must appear first, in correct order
+    const mixed = [
+      { timestamp: '2024-03-01T12:00:00Z', id: 'b' },
+      { timestamp: 'invalid', id: 'bad' },
+      { timestamp: '2024-03-03T12:00:00Z', id: 'c' },
+    ];
+    const { result } = renderHook(() => useSortedLog(mixed, 'desc'));
+    expect(result.current.sortedEntries.map((e) => e.id)).toEqual(['c', 'b', 'bad']);
+  });
+
+  it('sinks invalid timestamps to the end in ascending order', () => {
+    const mixed = [
+      { timestamp: 'bad-date', id: 'bad' },
+      { timestamp: '2024-03-03T12:00:00Z', id: 'c' },
+      { timestamp: '2024-03-01T12:00:00Z', id: 'b' },
+    ];
+    const { result } = renderHook(() => useSortedLog(mixed, 'asc'));
+    expect(result.current.sortedEntries.map((e) => e.id)).toEqual(['b', 'c', 'bad']);
+  });
+
+  it('keeps multiple invalid timestamps at the end, stable among themselves', () => {
+    const mixed = [
+      { timestamp: '2024-03-02T12:00:00Z', id: 'a' },
+      { timestamp: 'bad1', id: 'x' },
+      { timestamp: 'bad2', id: 'y' },
+    ];
+    const { result } = renderHook(() => useSortedLog(mixed, 'desc'));
+    const ids = result.current.sortedEntries.map((e) => e.id);
+    // valid entry first
+    expect(ids[0]).toBe('a');
+    // both invalid entries at the end (order among them doesn't matter)
+    expect(ids.slice(1).sort()).toEqual(['x', 'y']);
+  });
 });

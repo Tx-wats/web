@@ -34,14 +34,65 @@ export function validateXlmThreshold(value: number): string | null {
   return null
 }
 
-/** Formats a Unix ms timestamp as a locale date string (e.g. "5/29/2026"). */
+// ---------------------------------------------------------------------------
+// Cached Intl.DateTimeFormat instances — avoids creating a new formatter on
+// every render call, which is measurably expensive when lists are long.
+// ---------------------------------------------------------------------------
+
+/**
+ * Date-only formatter (e.g. "May 29, 2026").
+ * No timezone suffix — just the calendar date in the user's locale.
+ */
+const _dateFormatter = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+})
+
+/**
+ * Date + time formatter with short timezone name (e.g. "May 29, 2026, 3:04 PM UTC").
+ * The `timeZoneName: 'short'` makes the UTC offset / abbreviation visible so
+ * timestamps can be compared directly with on-chain UTC times.
+ */
+const _dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZoneName: 'short',
+})
+
+/**
+ * Time-only formatter with short timezone name (e.g. "3:04 PM UTC").
+ * Useful for rows where the date is already shown in context.
+ */
+const _timeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: 'numeric',
+  minute: '2-digit',
+  timeZoneName: 'short',
+})
+
+/** Formats a Unix ms timestamp as a locale date string (e.g. "May 29, 2026"). */
 export function formatDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString()
+  return _dateFormatter.format(new Date(timestamp))
 }
 
-/** Formats a Unix ms timestamp as a locale date+time string. */
+/**
+ * Formats a Unix ms timestamp as a locale date + time string with short
+ * timezone name (e.g. "May 29, 2026, 3:04 PM UTC").
+ */
 export function formatDateTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleString()
+  return _dateTimeFormatter.format(new Date(timestamp))
+}
+
+/**
+ * Formats a Unix ms timestamp as a time-only string with short timezone
+ * name (e.g. "3:04 PM UTC").  Use this when the date is already shown
+ * in a surrounding context (table row, tooltip, etc.).
+ */
+export function formatTime(timestamp: number): string {
+  return _timeFormatter.format(new Date(timestamp))
 }
 
 const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
