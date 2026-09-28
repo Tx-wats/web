@@ -1,5 +1,13 @@
 import { vi } from 'vitest'
-import { apiFetch, joinUrl, sendTestWebhook } from '@/lib/api'
+import {
+  apiFetch,
+  buildTestWebhookPayload,
+  describeRule,
+  joinUrl,
+  sendTestWebhook,
+  TEST_TX_HASH,
+} from '@/lib/api'
+import { horizonUrl } from '@/lib/stellar'
 
 global.fetch = vi.fn()
 
@@ -56,26 +64,115 @@ describe('apiFetch', () => {
   })
 })
 
-describe('sendTestWebhook', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
+describe('buildTestWebhookPayload', () => {
+  it('defaults to AnyTransaction with a well-formed hash and horizon link', () => {
+    const payload = buildTestWebhookPayload({
+      contractId: 'CBCDEF',
+      timestamp: 1700000000000,
+    })
 
-  it('sends webhook with correct payload structure', async () => {
-    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true })
-
-    await sendTestWebhook('https://example.com/webhook', 'CBCDEF')
-
-    const call = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
-    const payload = JSON.parse(call[1].body)
-
-    expect(payload).toMatchObject({
+    expect(payload).toEqual({
       label: 'Test Alert',
       contract_id: 'CBCDEF',
       network: 'testnet',
       rule_triggered: 'AnyTransaction',
+      transaction_hash: TEST_TX_HASH,
+      timestamp: 1700000000000,
+      horizon_link: `https://horizon-testnet.stellar.org/transactions/${TEST_TX_HASH}`,
+      is_test: true,
     })
-    expect(payload.transaction_hash).toMatch(/^TEST_HASH/)
+    // 64 lowercase hex chars, so hash-parsing receivers accept it.
+    expect(payload.transaction_hash).toMatch(/^[0-9a-f]{64}$/)
+    expect(payload.horizon_link).toContain(payload.transaction_hash)
+  })
+
+  it('mirrors the rule type and function_name for FunctionCalled', () => {
+    const payload = buildTestWebhookPayload({
+      contractId: 'CBCDEF',
+      network: 'mainnet',
+      rule: { type: 'FunctionCalled', function_name: 'transfer' },
+    })
+
+    expect(payload.rule_triggered).toBe('FunctionCalled')
+    expect(payload.function_name).toBe('transfer')
+    expect(payload.amount).toBeUndefined()
+    expect(payload.horizon_link).toBe(`${horizonUrl('mainnet')}/transactions/${payload.transaction_hash}`)
+  })
+
+  it('uses the first admin function for AdminFunctionCalled', () => {
+    const payload = buildTestWebhookPayload({
+      contractId: 'CBCDEF',
+      rule: { type: 'AdminFunctionCalled', function_names: ['set_admin', 'upgrade'] },
+    })
+
+    expect(payload.rule_triggered).toBe('AdminFunctionCalled')
+    expect(payload.function_name).toBe('set_admin')
+  })
+
+  it('carries the threshold as amount for LargeTransfer', () => {
+    const payload = buildTestWebhookPayload({
+      contractId: 'CBCDEF',
+      rule: { type: 'LargeTransfer', threshold_xlm: 500 },
+    })
+
+    expect(payload.rule_triggered).toBe('LargeTransfer')
+    expect(payload.amount).toBe(500)
+    expect(payload.function_name).toBeUndefined()
+  })
+})
+
+describe('describeRule', () => {
+  it('labels each rule variant with its configuration', () => {
+    expect(describeRule({ type: 'AnyTransaction' })).toBe('AnyTransaction')
+    expect(describeRule({ type: 'TransactionFailed' })).toBe('TransactionFailed')
+    expect(describeRule({ type: 'LargeTransfer', threshold_xlm: 100 })).toBe(
+      'LargeTransfer (over 100 XLM)'
+    )
+    expect(describeRule({ type: 'FunctionCalled', function_name: ' mint ' })).toBe(
+      'FunctionCalled (mint)'
+    )
+    expect(describeRule({ type: 'AdminFunctionCalled', function_names: ['set_admin'] })).toBe(
+      'AdminFunctionCalled (set_admin)'
+    )
+  })
+})
+
+describe('sendTestWebhook', () => {
+  const sentPayload = (): Record<string, unknown> => {
+    const call = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+    return JSON.parse((call[1] as RequestInit).body as string)
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('sends the rule-aware payload for the selected rule', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, status: 200 })
+
+    await sendTestWebhook('https://example.com/webhook', {
+      contractId: 'CBCDEF',
+      rule: { type: 'FunctionCalled', function_name: 'transfer' },
+    })
+
+    expect(sentPayload()).toMatchObject({
+      label: 'Test Alert',
+      contract_id: 'CBCDEF',
+      network: 'testnet',
+      rule_triggered: 'FunctionCalled',
+      function_name: 'transfer',
+      is_test: true,
+    })
+    expect(sentPayload().transaction_hash).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('sends a pre-built payload verbatim', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, status: 200 })
+
+    const payload = buildTestWebhookPayload({ contractId: 'CBCDEF', timestamp: 42 })
+    await sendTestWebhook('https://example.com/webhook', { payload })
+
+    expect(sentPayload()).toEqual(payload)
   })
 
   it('throws error on webhook failure', async () => {
@@ -86,7 +183,9 @@ describe('sendTestWebhook', () => {
 
     // A non-2xx is reported as a result rather than thrown, so the caller can
     // surface the actual status code (see app/contracts/new/page.tsx).
-    await expect(sendTestWebhook('https://example.com/webhook', 'CBCDEF')).resolves.toEqual({
+    await expect(
+      sendTestWebhook('https://example.com/webhook', { contractId: 'CBCDEF' })
+    ).resolves.toEqual({
       status: 404,
       ok: false,
     })
