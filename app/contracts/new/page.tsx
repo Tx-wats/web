@@ -38,6 +38,52 @@ export default function NewContractPage() {
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [showDiscardModal, setShowDiscardModal] = useState(false)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const isDirty = Boolean(
+    label.trim() || contractId.trim() || webhookUrl.trim() || webhookSecret.trim() || rules.length > 0
+  )
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty && !saving) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDirty, saving])
+
+  function navigateBack() {
+    if (
+      typeof window !== 'undefined' &&
+      window.history.length > 1 &&
+      document.referrer &&
+      document.referrer.includes(window.location.host)
+    ) {
+      router.back()
+    } else {
+      router.push('/contracts')
+    }
+  }
+
+  function handleCancel() {
+    if (isDirty) {
+      setShowDiscardModal(true)
+    } else {
+      navigateBack()
+    }
+  }
 
   // Pre-fill from a "Duplicate Contract" action. Data is passed via
   // sessionStorage (never the URL) so the webhook URL is not leaked.
@@ -147,6 +193,7 @@ export default function NewContractPage() {
     await syncSaveContract(contract, true)
     addContract(contract)
     if (!saveContract(contract)) {
+      setSaving(false)
       setToast({ message: 'Could not save contract: browser storage is full or unavailable.', type: 'error' })
       return
     }
@@ -156,7 +203,7 @@ export default function NewContractPage() {
       // ignore storage errors
     }
     setToast({ message: `Contract "${contract.label}" saved successfully!`, type: 'success' })
-    setTimeout(() => {
+    saveTimeoutRef.current = setTimeout(() => {
       router.push(`/contracts/${contract.id}`)
     }, 1500)
   }
@@ -164,6 +211,33 @@ export default function NewContractPage() {
   return (
     <>
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {showDiscardModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900 p-5 space-y-4">
+            <h3 className="text-base font-semibold text-zinc-100">Discard unsaved changes?</h3>
+            <p className="text-sm text-zinc-400">Your contract configuration will be lost.</p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDiscardModal(false)}
+                className="px-3 py-1.5 rounded-lg border border-zinc-700 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+              >
+                Keep editing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDiscardModal(false)
+                  navigateBack()
+                }}
+                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-medium text-white transition-colors"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="max-w-2xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-zinc-100">Add Contract</h1>
@@ -247,7 +321,7 @@ export default function NewContractPage() {
           </div>
         )}
 
-        <div className="flex gap-3 pt-2">
+        <div className="flex items-center gap-3 pt-2">
           <button
             type="button"
             onClick={handleSave}
@@ -255,6 +329,13 @@ export default function NewContractPage() {
             className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors"
           >
             {saving ? 'Saving…' : 'Save Contract'}
+          </button>
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="px-4 py-2.5 rounded-lg border border-zinc-700 hover:border-zinc-500 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+          >
+            Cancel
           </button>
           <button
             type="button"

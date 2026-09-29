@@ -91,6 +91,54 @@ describe('sendTestWebhook', () => {
       ok: false,
     })
   })
+
+  it('times out even when caller signal is provided (#22)', async () => {
+    vi.useFakeTimers()
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((_, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
+          })
+        })
+    )
+
+    const callerController = new AbortController()
+    const promise = sendTestWebhook(
+      'https://example.com/webhook',
+      'CBCDEF',
+      'testnet',
+      callerController.signal
+    )
+
+    vi.advanceTimersByTime(10001)
+
+    await expect(promise).rejects.toThrow('Webhook request timed out')
+    vi.useRealTimers()
+  })
+
+  it('distinguishes caller cancellation from timeout (#22)', async () => {
+    ;(global.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((_, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            reject(Object.assign(new Error('cancelled by caller'), { name: 'AbortError' }))
+          })
+        })
+    )
+
+    const callerController = new AbortController()
+    const promise = sendTestWebhook(
+      'https://example.com/webhook',
+      'CBCDEF',
+      'testnet',
+      callerController.signal
+    )
+
+    callerController.abort()
+
+    await expect(promise).rejects.toThrow('cancelled by caller')
+  })
 })
 
 describe('apiFetch hardening', () => {
