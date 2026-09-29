@@ -70,10 +70,71 @@ export async function apiFetch<T>(
   }
 }
 
+import type { AlertRule, AlertRuleType, Network } from '@/types'
+
 /** Result of a test webhook delivery: the HTTP status and whether it succeeded. */
 export interface TestWebhookResult {
   status: number
   ok: boolean
+  durationMs?: number
+}
+
+export interface TestWebhookPayloadOptions {
+  rule?: AlertRule | AlertRuleType | string
+  function_name?: string
+  amount?: string | number
+  transaction_hash?: string
+  is_test?: boolean
+}
+
+/**
+ * Builds a dynamic, rule-aware test webhook payload (#24).
+ * Replaces hardcoded values with realistic 64-hex dummy hashes,
+ * valid Horizon explorer links, and rule-matching attributes.
+ */
+export function buildTestWebhookPayload(
+  contractId: string,
+  network: Network = 'testnet',
+  options?: TestWebhookPayloadOptions
+) {
+  const dummyHash =
+    options?.transaction_hash ||
+    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+
+  let ruleType = 'AnyTransaction'
+  let functionName: string | undefined = options?.function_name
+  let amount: string | number | undefined = options?.amount
+
+  if (typeof options?.rule === 'string') {
+    ruleType = options.rule
+  } else if (options?.rule && typeof options.rule === 'object') {
+    ruleType = options.rule.rule_type
+    if (options.rule.rule_type === 'FunctionCalled') {
+      functionName = options.rule.function_name || functionName || 'transfer'
+    } else if (options.rule.rule_type === 'LargeTransfer') {
+      amount = options.rule.min_amount || amount || '1000'
+    }
+  }
+
+  const payload: Record<string, any> = {
+    label: 'Test Alert',
+    contract_id: contractId,
+    network,
+    rule_triggered: ruleType,
+    transaction_hash: dummyHash,
+    timestamp: Date.now(),
+    horizon_link: `${horizonUrl(network)}/transactions/${dummyHash}`,
+    is_test: true,
+  }
+
+  if (functionName) {
+    payload.function_name = functionName
+  }
+  if (amount !== undefined) {
+    payload.amount = amount
+  }
+
+  return payload
 }
 
 export async function sendTestWebhook(
@@ -81,18 +142,10 @@ export async function sendTestWebhook(
   contractId: string,
   network: Network = 'testnet',
   signalOrTimeoutMs: AbortSignal | number = 10000,
-  secret?: string
+  secret?: string,
+  options?: TestWebhookPayloadOptions
 ): Promise<TestWebhookResult> {
-  const payload = {
-    label: 'Test Alert',
-    contract_id: contractId,
-    network,
-    rule_triggered: 'AnyTransaction',
-    transaction_hash:
-      'TEST_HASH_0000000000000000000000000000000000000000000000000000000000000000',
-    timestamp: Date.now(),
-    horizon_link: `${horizonUrl(network)}/transactions/test`,
-  }
+  const payload = buildTestWebhookPayload(contractId, network, options)
 
   // Callers either hand us their own AbortSignal or rely on the default timeout.
   const external = typeof signalOrTimeoutMs === 'number' ? undefined : signalOrTimeoutMs
@@ -107,12 +160,28 @@ export async function sendTestWebhook(
     const body = JSON.stringify(payload)
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (secret) headers[SIGNATURE_HEADER] = await signWebhookPayload(secret, body)
-    const res = await fetch(webhookUrl, {
-      method: 'POST',
-      headers,
-      body,
-      signal,
-    })
+
+    // In browser production, route through server proxy to avoid CORS failures (#23)
+    const isBrowser = typeof window !== 'undefined'
+    const useProxy = isBrowser && process.env.NODE_ENV !== 'test'
+
+    let res: Response
+    if (useProxy) {
+      res = await fetch('/api/test-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: webhookUrl, payload, secret }),
+        signal,
+      })
+    } else {
+      res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers,
+        body,
+        signal,
+      })
+    }
+
     // The status is reported back rather than thrown on, so callers can show
     // the actual code; a non-2xx is still a failed delivery.
     return { status: res.status, ok: res.ok }
