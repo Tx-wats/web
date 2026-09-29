@@ -1,8 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-
-const WALLET_STORAGE_KEY = 'freighter_public_key'
+import {
+  connectFreighter,
+  FreighterUnavailableError,
+  openFreighterInstallPage,
+  readFreighterConnection,
+} from '@/lib/freighter'
 
 interface FreighterConnectProps {
   className?: string
@@ -23,16 +27,10 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
 
   async function checkConnection() {
     try {
-      if (!window.freighter) {
-        return
-      }
-
-      const connected = await window.freighter.isConnected()
-      if (connected) {
-        const key = await window.freighter.getPublicKey()
-        setPublicKey(key)
-        window.__freighterPublicKey = key
-        onConnect?.(key)
+      const connection = await readFreighterConnection()
+      if (connection?.publicKey) {
+        setPublicKey(connection.publicKey)
+        onConnect?.(connection.publicKey)
       }
     } catch {
       // Connection check failed
@@ -48,36 +46,25 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
     setError(null)
 
     try {
-      if (!window.freighter) {
-        window.open('https://www.freighter.app/', '_blank')
-        setError('Freighter not installed - install the extension and reload')
-        return
-      }
-
-      const key = await window.freighter.getPublicKey()
-      const network = await window.freighter.getNetwork()
-
-      if (!key || !network) {
-        setError('Failed to retrieve wallet information')
-        return
-      }
-
-      setPublicKey(key)
-      window.__freighterPublicKey = key
-      localStorage.setItem(WALLET_STORAGE_KEY, key)
-      onConnect?.(key)
+      const session = await connectFreighter()
+      setPublicKey(session.publicKey)
+      onConnect?.(session.publicKey)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Connection rejected'
-      setError(message)
+      if (err instanceof FreighterUnavailableError) {
+        openFreighterInstallPage()
+      }
+      setError(err instanceof Error ? err.message : 'Connection rejected')
     } finally {
       setLoading(false)
       setIsConnecting(false)
     }
   }
 
+  // The extension stays authorised after this — this only clears the local view
+  // of the session. Nothing is persisted: the wallet is the source of truth, so
+  // a key cached in localStorage would outlive an account switch in Freighter.
   function disconnect() {
     setPublicKey(null)
-    localStorage.removeItem(WALLET_STORAGE_KEY)
   }
 
   if (isInitializing) {

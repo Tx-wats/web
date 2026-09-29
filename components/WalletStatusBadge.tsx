@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { readFreighterConnection } from '@/lib/freighter'
 
 type WalletStatus = 'connected' | 'disconnected' | 'unavailable'
 
@@ -8,14 +9,24 @@ export default function WalletStatusBadge() {
   const [status, setStatus] = useState<WalletStatus>('unavailable')
 
   useEffect(() => {
-    if (!window.freighter) {
-      setStatus('unavailable')
-      return
-    }
+    let cancelled = false
 
-    window.freighter.isConnected().then((connected) => {
-      setStatus(connected ? 'connected' : 'disconnected')
-    })
+    readFreighterConnection()
+      .then((connection) => {
+        if (cancelled) return
+        if (!connection) {
+          setStatus('unavailable')
+          return
+        }
+        setStatus(connection.publicKey ? 'connected' : 'disconnected')
+      })
+      .catch(() => {
+        if (!cancelled) setStatus('disconnected')
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const statusConfig = {

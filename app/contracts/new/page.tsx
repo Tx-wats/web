@@ -8,6 +8,7 @@ import { getContracts } from '@/lib/storage'
 import { syncSaveContract } from '@/lib/contractSync'
 import { addContract, getContracts } from '@/lib/storage'
 import { sendTestWebhook } from '@/lib/api'
+import { getWalletNetwork, isNetworkMatch } from '@/lib/freighter'
 import { generateWebhookSecret } from '@/lib/webhookSignature'
 import CopyButton from '@/components/CopyButton'
 import { useFreighterConnection } from '@/lib/useFreighterConnection'
@@ -103,24 +104,17 @@ export default function NewContractPage() {
   }
 
   async function checkNetworkMismatch(selectedNetwork: Network) {
-    if (!window.freighter) return
-    try {
-      const walletNetwork = await window.freighter.getNetwork()
-      const networkMap: Record<string, string> = {
-        testnet: 'TESTNET',
-        mainnet: 'PUBLIC',
-        futurenet: 'FUTURENET',
-      }
-      const expectedNetwork = networkMap[selectedNetwork]
-      if (walletNetwork !== expectedNetwork) {
-        setNetworkWarning(
-          `Your wallet is on ${walletNetwork}, but this contract is on ${selectedNetwork.toUpperCase()}`
-        )
-      } else {
-        setNetworkWarning(null)
-      }
-    } catch {
+    const walletNetwork = await getWalletNetwork()
+    if (!walletNetwork) {
       setNetworkWarning(null)
+      return
+    }
+    if (isNetworkMatch(selectedNetwork, walletNetwork)) {
+      setNetworkWarning(null)
+    } else {
+      setNetworkWarning(
+        `Your wallet is on ${walletNetwork}, but this contract is on ${selectedNetwork.toUpperCase()}`
+      )
     }
   }
 
