@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule, isRuleEnabled } from '@/types'
-import { getContract, getAlerts } from '@/lib/storage'
 import { syncSaveContract, syncDeleteContract } from '@/lib/contractSync'
 import { getContract, deleteContract, getAlerts, saveContract, seedMockAlerts } from '@/lib/storage'
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
@@ -53,7 +52,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
       return 
     }
     setContract(c)
-    setAlerts(getAlerts(params.id))
+    setAlerts(getAlerts(c.contract_id))
     setMounted(true)
   }, [params.id, router])
 

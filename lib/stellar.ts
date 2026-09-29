@@ -1,4 +1,5 @@
 import { Network } from '@/types'
+import { Address, xdr } from '@stellar/stellar-sdk'
 
 export const HORIZON_URLS: Record<Network, string> = {
   mainnet: 'https://horizon.stellar.org',
@@ -79,6 +80,121 @@ export function truncateId(id: string, chars = 8): string {
 
 export function isValidContractId(id: string): boolean {
   return /^C[A-Z2-7]{55}$/.test(id)
+}
+
+export interface NormalizedContractIdResult {
+  contractId: string
+  network?: Network
+}
+
+/**
+ * Normalizes user-pasted contract IDs (#16):
+ * - Trims and removes surrounding whitespace/newlines
+ * - Extracts contract ID and network from explorer URLs
+ * - Converts to uppercase
+ */
+export function normalizeContractId(input: string): NormalizedContractIdResult {
+  if (!input) return { contractId: '' }
+  let cleaned = input.trim()
+
+  const explorerMatch = cleaned.match(
+    /(?:https?:\/\/)?(?:[a-zA-Z0-9-]+\.)?stellar\.expert\/explorer\/(public|testnet|futurenet)\/contract\/([A-Za-z0-9]+)/i
+  )
+
+  if (explorerMatch) {
+    const rawNetwork = explorerMatch[1].toLowerCase()
+    const rawId = explorerMatch[2].trim().toUpperCase()
+    const network: Network = rawNetwork === 'public' ? 'mainnet' : (rawNetwork as Network)
+    return {
+      contractId: rawId,
+      network,
+    }
+  }
+
+  const pathMatch = cleaned.match(/\/contract\/([A-Za-z0-9]+)/i)
+  if (pathMatch) {
+    return {
+      contractId: pathMatch[1].trim().toUpperCase(),
+    }
+  }
+
+  cleaned = cleaned.replace(/\s+/g, '').toUpperCase()
+  return {
+    contractId: cleaned,
+  }
+}
+
+export function buildContractInstanceLedgerKey(contractId: string): string {
+  try {
+    const address = Address.fromString(contractId)
+    const durability =
+      typeof (xdr.ContractDataDurability as any)?.persistent === 'function'
+        ? (xdr.ContractDataDurability as any).persistent()
+        : (xdr.ContractDataDurability as any)?.persistent
+    const ledgerKey = xdr.LedgerKey.contractData(
+      new xdr.LedgerKeyContractData({
+        contract: address.toScAddress(),
+        key: xdr.ScVal.scvLedgerKeyContractInstance(),
+        durability,
+      })
+    )
+    return ledgerKey.toXDR('base64')
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Checks whether a contract exists on the target network via Soroban RPC (#17).
+ * Gracefully resolves true if RPC times out or is unreachable.
+ */
+export async function contractExists(
+  network: Network,
+  contractId: string,
+  timeoutMs = 5000
+): Promise<boolean> {
+  const url = sorobanRpcUrl(network)
+  const key = buildContractInstanceLedgerKey(contractId)
+  if (!key) return false
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getLedgerEntries',
+        params: {
+          keys: [key],
+        },
+      }),
+      signal: controller.signal,
+    })
+
+    if (!res.ok) {
+      return true
+    }
+
+    const data = await res.json()
+    if (data?.error) {
+      return true
+    }
+
+    const entries = data?.result?.entries
+    if (Array.isArray(entries)) {
+      return entries.length > 0
+    }
+
+    return true
+  } catch {
+    return true
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 export function isValidUrl(url: string): boolean {
