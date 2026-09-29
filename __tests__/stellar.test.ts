@@ -32,4 +32,11 @@ describe('isValidContractId', () => {
       false
     )
   })
+
+  it('rejects contract IDs with invalid checksum even if regex format matches', () => {
+    // Matches /^C[A-Z2-7]{55}$/ but fails CRC16 checksum
+    expect(isValidContractId('CDSO4GGZH7KBUQYKOIQDCMCFSRYEPOVDUX7Z4IB5TWNTLT2GDRKDQOYQ')).toBe(
+      false
+    )
+  })
 })
