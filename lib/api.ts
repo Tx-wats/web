@@ -243,14 +243,41 @@ export async function sendTestWebhook(
       ? options.payload
       : buildTestWebhookPayload(options)
 
-  // Callers either hand us their own AbortSignal or rely on the default timeout.
-  const external = typeof signalOrTimeoutMs === 'number' ? undefined : signalOrTimeoutMs
-  const controller = new AbortController()
-  const timeoutId =
-    external === undefined
-      ? setTimeout(() => controller.abort(), signalOrTimeoutMs as number)
-      : undefined
-  const signal = external ?? controller.signal
+  const externalSignal = typeof signalOrTimeoutMs === 'number' ? undefined : signalOrTimeoutMs
+  const timeoutMs = typeof signalOrTimeoutMs === 'number' ? signalOrTimeoutMs : 10000
+
+  const internalController = new AbortController()
+  let timedOut = false
+
+  const timeoutId = setTimeout(() => {
+    timedOut = true
+    internalController.abort(new Error('timed out'))
+  }, timeoutMs)
+
+  const combinedController = new AbortController()
+
+  const onCallerAbort = () => {
+    clearTimeout(timeoutId)
+    if (!combinedController.signal.aborted) {
+      combinedController.abort(externalSignal?.reason || new Error('cancelled by caller'))
+    }
+  }
+
+  const onTimeoutAbort = () => {
+    if (!combinedController.signal.aborted) {
+      combinedController.abort(new Error('timed out'))
+    }
+  }
+
+  if (externalSignal?.aborted) {
+    clearTimeout(timeoutId)
+    combinedController.abort(externalSignal.reason || new Error('cancelled by caller'))
+  } else {
+    externalSignal?.addEventListener('abort', onCallerAbort, { once: true })
+    internalController.signal.addEventListener('abort', onTimeoutAbort, { once: true })
+  }
+
+  const signal = combinedController.signal
 
   try {
     const body = JSON.stringify(payload)
@@ -282,12 +309,20 @@ export async function sendTestWebhook(
     // the actual code; a non-2xx is still a failed delivery.
     return { status: res.status, ok: res.ok }
   } catch (error) {
-    const err = error as { name?: string }
-    if (err?.name === 'AbortError') {
+    if (timedOut || internalController.signal.aborted) {
+      throw new Error('Webhook request timed out')
+    }
+    if (externalSignal?.aborted) {
+      throw new Error('Webhook request cancelled by caller')
+    }
+    const err = error as { name?: string; message?: string }
+    if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
       throw new Error('Webhook request timed out')
     }
     throw error
   } finally {
-    if (timeoutId !== undefined) clearTimeout(timeoutId)
+    clearTimeout(timeoutId)
+    externalSignal?.removeEventListener('abort', onCallerAbort)
+    internalController.signal.removeEventListener('abort', onTimeoutAbort)
   }
 }
