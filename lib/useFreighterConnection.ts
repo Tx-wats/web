@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { readFreighterConnection } from '@/lib/freighter'
 
 export function useFreighterConnection() {
   const [isConnected, setIsConnected] = useState(false)
@@ -11,19 +12,9 @@ export function useFreighterConnection() {
 
   async function checkConnection() {
     try {
-      if (!window.freighter) {
-        setIsConnected(false)
-        setLoading(false)
-        return
-      }
-      const connected = await window.freighter.isConnected()
-      if (connected) {
-        const key = await window.freighter.getPublicKey()
-        setPublicKey(key)
-        setIsConnected(true)
-      } else {
-        setIsConnected(false)
-      }
+      const connection = await readFreighterConnection()
+      setPublicKey(connection?.publicKey ?? null)
+      setIsConnected(Boolean(connection?.publicKey))
     } catch {
       setIsConnected(false)
     } finally {
