@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertPayload, AlertRule, Network, WatchedContract } from '@/types'
@@ -35,6 +36,9 @@ interface FormErrors {
 export default function NewContractPage() {
   const router = useRouter()
   const { isConnected } = useFreighterConnection()
+  const [networkWarning, setNetworkWarning] = useState<string | null>(null)
+  const [hasNetworkMismatch, setHasNetworkMismatch] = useState(false)
+  const [mismatchAcknowledged, setMismatchAcknowledged] = useState(false)
   const [label, setLabel] = useState('')
   const [labelWarning, setLabelWarning] = useState<string | null>(null)
   const [contractId, setContractId] = useState('')
@@ -103,8 +107,54 @@ export default function NewContractPage() {
     }
   }, [])
 
+  const checkNetworkMismatch = useCallback(async (selectedNetwork: Network) => {
+    if (!window.freighter) {
+      setNetworkWarning(null)
+      setHasNetworkMismatch(false)
+      return
+    }
+    try {
+      const connected = await window.freighter.isConnected()
+      if (!connected) {
+        setNetworkWarning(null)
+        setHasNetworkMismatch(false)
+        return
+      }
+      const walletNetwork = await window.freighter.getNetwork()
+      const networkMap: Record<string, string> = {
+        testnet: 'TESTNET',
+        mainnet: 'PUBLIC',
+        futurenet: 'FUTURENET',
+      }
+      const expectedNetwork = networkMap[selectedNetwork]
+      if (walletNetwork && walletNetwork !== expectedNetwork) {
+        setNetworkWarning(
+          `Your wallet is on ${walletNetwork}, but this contract is on ${selectedNetwork.toUpperCase()}`
+        )
+        setHasNetworkMismatch(true)
+      } else {
+        setNetworkWarning(null)
+        setHasNetworkMismatch(false)
+      }
+    } catch {
+      setNetworkWarning(null)
+      setHasNetworkMismatch(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isConnected) {
+      checkNetworkMismatch(network)
+    } else {
+      setNetworkWarning(null)
+      setHasNetworkMismatch(false)
+      setMismatchAcknowledged(false)
+    }
+  }, [network, isConnected, checkNetworkMismatch])
+
   function handleWalletConnect() {
     setErrors((prev) => ({ ...prev, wallet: undefined }))
+    checkNetworkMismatch(network)
     // The wallet's network is only knowable once it is connected.
     void checkNetworkMismatch()
   }
@@ -132,6 +182,9 @@ export default function NewContractPage() {
     if (!trimmedWebhookUrl) e.webhook_url = 'Webhook URL is required'
     else if (!isValidUrl(trimmedWebhookUrl)) e.webhook_url = 'Must be a valid http/https URL'
     if (rules.length === 0) e.rules = 'Add at least one alert rule'
+    if (hasNetworkMismatch && !mismatchAcknowledged) {
+      e.network = 'Please acknowledge that your wallet is on a different network before saving'
+    }
     return e
   }
 
@@ -325,6 +378,12 @@ export default function NewContractPage() {
           <label className="block text-sm font-medium text-zinc-300 mb-1.5">Network</label>
           <select
             value={network}
+            onChange={(e) => {
+              const n = e.target.value as Network
+              setNetwork(n)
+              setErrors((prev) => ({ ...prev, network: undefined }))
+              checkNetworkMismatch(n)
+            }}
             onChange={(e) => setNetwork(e.target.value as Network)}
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 transition-colors"
           >
@@ -333,6 +392,26 @@ export default function NewContractPage() {
             <option value="futurenet">Futurenet</option>
           </select>
           {networkWarning && <p className="text-xs text-amber-400 mt-1">{networkWarning}</p>}
+          {hasNetworkMismatch && (
+            <div className="mt-2 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="acknowledge-mismatch"
+                checked={mismatchAcknowledged}
+                onChange={(e) => {
+                  setMismatchAcknowledged(e.target.checked)
+                  if (e.target.checked) {
+                    setErrors((prev) => ({ ...prev, network: undefined }))
+                  }
+                }}
+                className="rounded border-zinc-700 bg-zinc-900 text-indigo-600 focus:ring-indigo-500"
+              />
+              <label htmlFor="acknowledge-mismatch" className="text-xs text-zinc-300">
+                I understand this contract is on a different network than my connected wallet
+              </label>
+            </div>
+          )}
+          {errors.network && <p className="text-xs text-red-400 mt-1">{errors.network}</p>}
         </div>
 
         {/* Webhook URL */}
