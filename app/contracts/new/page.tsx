@@ -1,21 +1,23 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertRule, Network, WatchedContract } from '@/types'
+import { AlertPayload, AlertRule, Network, WatchedContract } from '@/types'
 import { isValidContractId, isValidUrl } from '@/lib/stellar'
-import { getContracts } from '@/lib/storage'
 import { syncSaveContract } from '@/lib/contractSync'
 import { addContract, getContracts } from '@/lib/storage'
 import { sendTestWebhook } from '@/lib/api'
 import { getWalletNetwork, isNetworkMatch } from '@/lib/freighter'
+import { addContract, getContracts, saveContract } from '@/lib/storage'
+import { buildTestWebhookPayload, describeRule, sendTestWebhook } from '@/lib/api'
 import { generateWebhookSecret } from '@/lib/webhookSignature'
 import CopyButton from '@/components/CopyButton'
+import ContractVerification from '@/components/ContractVerification'
 import { useFreighterConnection } from '@/lib/useFreighterConnection'
+import { useNetworkMismatchWarning } from '@/lib/useNetworkMismatchWarning'
 import RuleBuilder from '@/components/RuleBuilder'
 import FreighterConnect from '@/components/FreighterConnect'
 import Toast from '@/components/Toast'
-import WebhookTestButton from '@/components/WebhookTestButton'
 
 interface FormErrors {
   label?: string
@@ -29,7 +31,6 @@ interface FormErrors {
 export default function NewContractPage() {
   const router = useRouter()
   const { isConnected } = useFreighterConnection()
-  const [networkWarning, setNetworkWarning] = useState<string | null>(null)
   const [label, setLabel] = useState('')
   const [contractId, setContractId] = useState('')
   const [network, setNetwork] = useState<Network>('testnet')
@@ -39,6 +40,34 @@ export default function NewContractPage() {
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [testRuleIndex, setTestRuleIndex] = useState(0)
+  const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'ok' | 'error'>('idle')
+  const [testError, setTestError] = useState<string | null>(null)
+  const testAbortRef = useRef<AbortController | null>(null)
+
+  // The rule being simulated; falls back to the first rule if it was removed.
+  const testRule: AlertRule | undefined =
+    rules[testRuleIndex] ?? (rules.length > 0 ? rules[0] : undefined)
+
+  // Preview of the exact JSON that will be posted, so the receiver's
+  // rule-specific branching can be checked before delivering it.
+  const testPayload = useMemo<AlertPayload>(
+    () =>
+      buildTestWebhookPayload({
+        contractId: contractId.trim(),
+        network,
+        rule: testRule,
+      }),
+    [contractId, network, testRule]
+  )
+
+  // Abort an in-flight test delivery if the form unmounts mid-request.
+  useEffect(() => () => testAbortRef.current?.abort(), [])
+
+  // Warns on mount, on network change, and after connecting, not only when the
+  // network <select> changes.
+  const { networkWarning, checkNetworkMismatch, clearNetworkWarning } =
+    useNetworkMismatchWarning(network, isConnected)
 
   // Pre-fill from a "Duplicate Contract" action. Data is passed via
   // sessionStorage (never the URL) so the webhook URL is not leaked.
@@ -67,6 +96,12 @@ export default function NewContractPage() {
 
   function handleWalletConnect() {
     setErrors((prev) => ({ ...prev, wallet: undefined }))
+    // The wallet's network is only knowable once it is connected.
+    void checkNetworkMismatch()
+  }
+
+  function handleWalletDisconnect() {
+    clearNetworkWarning()
   }
 
   function validate(): FormErrors {
@@ -155,6 +190,52 @@ export default function NewContractPage() {
     }, 1500)
   }
 
+  async function handleTestWebhook() {
+    const url = webhookUrl.trim()
+    if (!url) {
+      setTestStatus('error')
+      setTestError('Enter a webhook URL first.')
+      return
+    }
+    if (!isValidUrl(url)) {
+      setTestStatus('error')
+      setTestError('Must be a valid http/https URL')
+      return
+    }
+
+    testAbortRef.current?.abort()
+    const controller = new AbortController()
+    testAbortRef.current = controller
+
+    setTestStatus('sending')
+    setTestError(null)
+
+    // Send the exact payload shown in the preview, with a fresh timestamp.
+    const payload = buildTestWebhookPayload({
+      contractId: contractId.trim(),
+      network,
+      rule: testRule,
+    })
+
+    try {
+      const res = await sendTestWebhook(url, {
+        payload,
+        signalOrTimeoutMs: controller.signal,
+        secret: webhookSecret || undefined,
+      })
+      if (res.ok) {
+        setTestStatus('ok')
+      } else {
+        setTestStatus('error')
+        setTestError(`Receiver responded with HTTP ${res.status}.`)
+      }
+    } catch (err) {
+      if ((err as { name?: string })?.name === 'AbortError') return
+      setTestStatus('error')
+      setTestError(err instanceof Error ? err.message : 'Failed to send test webhook.')
+    }
+  }
+
   return (
     <>
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
@@ -195,6 +276,7 @@ export default function NewContractPage() {
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors font-mono"
           />
           {errors.contract_id && <p className="text-xs text-red-400 mt-1">{errors.contract_id}</p>}
+          <ContractVerification network={network} contractId={contractId} className="mt-1" />
         </div>
 
         {/* Network */}
@@ -202,7 +284,7 @@ export default function NewContractPage() {
           <label className="block text-sm font-medium text-zinc-300 mb-1.5">Network</label>
           <select
             value={network}
-            onChange={(e) => { const n = e.target.value as Network; setNetwork(n); checkNetworkMismatch(n) }}
+            onChange={(e) => setNetwork(e.target.value as Network)}
             className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 transition-colors"
           >
             <option value="testnet">Testnet</option>
@@ -217,7 +299,6 @@ export default function NewContractPage() {
           <label className="block text-sm font-medium text-zinc-300 mb-1.5">Webhook URL</label>
           <input
             type="url"
-            type="text"
             placeholder="https://example.com/webhook"
             value={webhookUrl}
             onChange={(e) => { setWebhookUrl(e.target.value); setErrors((prev) => ({ ...prev, webhook_url: undefined })) }}
@@ -236,7 +317,7 @@ export default function NewContractPage() {
         {/* Wallet */}
         {!isConnected && (
           <div>
-            <FreighterConnect onConnect={handleWalletConnect} />
+            <FreighterConnect onConnect={handleWalletConnect} onDisconnect={handleWalletDisconnect} />
             {errors.wallet && <p className="text-xs text-red-400 mt-1">{errors.wallet}</p>}
           </div>
         )}
@@ -258,17 +339,49 @@ export default function NewContractPage() {
           >
             {testStatus === 'sending' ? 'Testing…' : 'Test Webhook'}
           </button>
-          <WebhookTestButton
-            webhookUrl={webhookUrl}
-            contractId={contractId}
-            network={network}
-            webhookSecret={webhookSecret}
-            onError={(field, message) => setErrors((prev) => ({ ...prev, [field]: message }))}
-            className="mt-2"
-          />
         </div>
         {testStatus === 'ok' && <p className="text-xs text-emerald-400">Webhook delivered successfully.</p>}
         {testStatus === 'error' && <p className="text-xs text-red-400">{testError}</p>}
+
+        {/* Simulated delivery */}
+        <div className="border border-zinc-800 rounded-lg p-4 space-y-3">
+          <div>
+            <label htmlFor="test-rule" className="block text-sm font-medium text-zinc-300 mb-1.5">
+              Simulate rule
+            </label>
+            <select
+              id="test-rule"
+              value={Math.min(testRuleIndex, Math.max(rules.length - 1, 0))}
+              onChange={(e) => {
+                setTestRuleIndex(Number(e.target.value))
+                setTestStatus('idle')
+                setTestError(null)
+              }}
+              disabled={rules.length === 0}
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 transition-colors disabled:opacity-50"
+            >
+              {rules.length === 0 && <option value={0}>No rules configured yet</option>}
+              {rules.map((rule, index) => (
+                <option key={index} value={index}>
+                  {describeRule(rule)}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-zinc-500 mt-1">
+              Sends a realistic payload for the selected rule, marked with{' '}
+              <code className="text-zinc-400">is_test: true</code>.
+            </p>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="block text-sm font-medium text-zinc-300">Payload preview</span>
+              <CopyButton text={JSON.stringify(testPayload, null, 2)} />
+            </div>
+            <pre className="w-full max-h-64 overflow-auto bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-xs text-zinc-300 font-mono whitespace-pre-wrap break-all">
+              {JSON.stringify(testPayload, null, 2)}
+            </pre>
+          </div>
+        </div>
       </div>
       </div>
       </div>
