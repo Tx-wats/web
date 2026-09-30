@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule, isRuleEnabled } from '@/types'
 import { getContract, getAlerts } from '@/lib/storage'
 import { syncSaveContract, syncDeleteContract } from '@/lib/contractSync'
-import { getContract, deleteContract, getAlerts, saveContract, seedMockAlerts } from '@/lib/storage'
+import { getContract, deleteContract, getAlerts, saveContract, seedMockAlerts, getContracts } from '@/lib/storage'
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
 import { formatDate, formatRuleSummary } from '@/lib/format'
 import { useAnalytics } from '@/lib/useAnalytics'
@@ -39,6 +39,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   const [editedWebhookUrl, setEditedWebhookUrl] = useState('')
   const [editedNetwork, setEditedNetwork] = useState<WatchedContract['network']>('testnet')
   const [metadataError, setMetadataError] = useState<string | null>(null)
+  const [editedLabelWarning, setEditedLabelWarning] = useState<string | null>(null)
 
   const sync = useAlertSync(contract?.contract_id, contract?.network, (fresh) => {
     setAlerts(getAlerts(contract?.contract_id ?? params.id))
@@ -113,6 +114,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
     setEditedWebhookUrl(contract!.webhook_url)
     setEditedNetwork(contract!.network)
     setMetadataError(null)
+    setEditedLabelWarning(null)
     setShowEditMetadata(true)
     trackEvent('metadata_edit_opened', { contractId: params.id })
   }
@@ -534,9 +536,19 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
               <label className="text-sm text-zinc-400">Label</label>
               <input
                 value={editedLabel}
-                onChange={(e) => setEditedLabel(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setEditedLabel(val)
+                  const trimmed = val.trim().toLowerCase()
+                  if (trimmed && getContracts().some((c) => c.id !== contract?.id && c.label.trim().toLowerCase() === trimmed)) {
+                    setEditedLabelWarning('A contract with this label already exists')
+                  } else {
+                    setEditedLabelWarning(null)
+                  }
+                }}
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
               />
+              {editedLabelWarning && <p className="text-xs text-amber-400">{editedLabelWarning}</p>}
             </div>
 
             <div className="space-y-1">
