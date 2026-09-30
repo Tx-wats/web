@@ -3,6 +3,7 @@
 import React, { useCallback, useState } from 'react';
 import { formatAmount } from '@/lib/formatAmount';
 import { truncateId } from '@/lib/format';
+import { formatDateTime } from '@/lib/format';
 import { explorerTxUrl } from '@/lib/explorer';
 
 export interface WebhookEntry {
@@ -27,17 +28,6 @@ const STATUS_STYLES: Record<WebhookEntry['status'], string> = {
   failed:  'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
 };
-
-function formatTimestamp(ts: string): string {
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(ts));
-  } catch {
-    return ts;
-  }
-}
 
 function buildPayload(entry: WebhookEntry): Record<string, unknown> {
   if (entry.payload) return entry.payload;
@@ -111,7 +101,7 @@ export function WebhookLogCard({ entry, network }: WebhookLogCardProps) {
         </div>
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span aria-label="Time">{formatTimestamp(entry.timestamp)}</span>
+          <span aria-label="Time" title={formatDateTime(entry.timestamp)}>{formatDateTime(entry.timestamp)}</span>
         </div>
 
         {entry.contractAddress && (

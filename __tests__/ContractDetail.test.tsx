@@ -1,5 +1,6 @@
 import { formatRuleSummary, formatDate } from '@/lib/format'
-import { AlertRule } from '@/types'
+import { AlertRule, WatchedContract } from '@/types'
+import { saveContract, getAlerts, seedMockAlerts } from '@/lib/storage'
 
 describe('formatRuleSummary', () => {
   it('formats LargeTransfer rule with threshold', () => {
@@ -305,3 +306,37 @@ describe('Modal keyboard interaction', () => {
     expect(document.activeElement).toBe(trigger)
   })
 })
+
+describe('ContractDetail alert history lookup regression (#26)', () => {
+  const contractId = 'CDSO4GGZH7KBUQYKOIQDCMCFSRYEPOVDUX7Z4IB5TWNTLT2GDRKDQOYR'
+  const internalUuid = 'uuid-contract-999'
+
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('loads alerts by contract.contract_id rather than internal uuid', () => {
+    const mockContract: WatchedContract = {
+      id: internalUuid,
+      label: 'DeFi Pool',
+      contract_id: contractId,
+      network: 'testnet',
+      rules: [{ type: 'AnyTransaction' }],
+      webhook_url: 'https://example.com/webhook',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    }
+    saveContract(mockContract)
+    seedMockAlerts(contractId, 'testnet', 3)
+
+    // Lookup using internal uuid yields 0 alerts
+    const alertsByUuid = getAlerts(mockContract.id)
+    expect(alertsByUuid).toHaveLength(0)
+
+    // Lookup using contract.contract_id correctly loads all seeded alerts
+    const alertsByContractId = getAlerts(mockContract.contract_id)
+    expect(alertsByContractId).toHaveLength(3)
+    expect(alertsByContractId[0].contract_id).toBe(contractId)
+  })
+})
+

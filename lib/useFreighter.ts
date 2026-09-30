@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { broadcastWalletChange, subscribeWallet } from '@/lib/walletEvents'
 
 declare global {
   interface Window {
@@ -14,6 +15,12 @@ declare global {
     __freighterPublicKey?: string | null
   }
 }
+import {
+  connectFreighter,
+  FreighterUnavailableError,
+  openFreighterInstallPage,
+  readFreighterConnection,
+} from '@/lib/freighter'
 
 export interface FreighterState {
   publicKey: string | null
@@ -38,10 +45,21 @@ export function useFreighter() {
           window.freighter!.getPublicKey(),
           window.freighter!.getNetwork(),
         ])
+        broadcastWalletChange(publicKey)
         setState({ publicKey, network, loading: false, error: null })
+      const connection = await readFreighterConnection()
+      if (connection?.publicKey) {
+        setState({
+          publicKey: connection.publicKey,
+          network: connection.network,
+          loading: false,
+          error: null,
+        })
+        return
       }
+      setState((prev) => ({ ...prev, loading: false }))
     } catch {
-      setState((prev) => ({ ...prev, error: 'Failed to initialize Freighter' }))
+      setState((prev) => ({ ...prev, loading: false, error: 'Failed to initialize Freighter' }))
     }
   }, [])
 
@@ -49,29 +67,46 @@ export function useFreighter() {
     initialize()
   }, [initialize])
 
+  useEffect(
+    () =>
+      subscribeWallet((publicKey) => {
+        setState((prev) => ({ ...prev, publicKey, network: null }))
+      }),
+    []
+  )
+
   const connect = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }))
     try {
-      if (!window.freighter) {
-        window.open('https://www.freighter.app/', '_blank')
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: 'Freighter not installed — install the extension and reload',
-        }))
-        return
+      const session = await connectFreighter()
+      setState({
+        publicKey: session.publicKey,
+        network: session.network,
+        loading: false,
+        error: null,
+      })
+    } catch (err) {
+      if (err instanceof FreighterUnavailableError) {
+        openFreighterInstallPage()
       }
       const [publicKey, network] = await Promise.all([
         window.freighter.getPublicKey(),
         window.freighter.getNetwork(),
       ])
+      broadcastWalletChange(publicKey)
       setState({ publicKey, network, loading: false, error: null })
     } catch {
       setState((prev) => ({ ...prev, loading: false, error: 'Connection rejected' }))
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        error: err instanceof Error ? err.message : 'Connection rejected',
+      }))
     }
   }, [])
 
   const disconnect = useCallback(() => {
+    broadcastWalletChange(null)
     setState({ publicKey: null, network: null, loading: false, error: null })
   }, [])
 

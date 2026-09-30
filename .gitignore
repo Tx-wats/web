@@ -10,6 +10,10 @@
 /coverage
 **/__snapshots__/
 *.snap
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
 
 # next.js
 /.next/
