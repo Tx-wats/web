@@ -72,6 +72,25 @@ export function isNetwork(value: string | undefined): value is Network {
   return value === 'mainnet' || value === 'testnet' || value === 'futurenet'
 }
 
+/**
+ * Maps Freighter network strings (e.g. PUBLIC, TESTNET, FUTURENET) to the app Network type (#8).
+ */
+export function mapFreighterNetwork(freighterNetwork: string | null | undefined): Network | null {
+  if (!freighterNetwork) return null
+  const normalized = freighterNetwork.trim().toUpperCase()
+  switch (normalized) {
+    case 'PUBLIC':
+    case 'MAINNET':
+      return 'mainnet'
+    case 'TESTNET':
+      return 'testnet'
+    case 'FUTURENET':
+      return 'futurenet'
+    default:
+      return null
+  }
+}
+
 export function truncateId(id: string, chars = 8): string {
   if (id.length <= chars * 2 + 3) return id
   return `${id.slice(0, chars)}...${id.slice(-chars)}`

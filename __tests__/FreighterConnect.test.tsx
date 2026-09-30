@@ -161,6 +161,8 @@ describe('FreighterConnect', () => {
   })
 
   describe('unavailable extension', () => {
+    it('shows error and install link when extension is not installed', async () => {
+      delete (window as any).freighter
     it('shows error when extension is not installed', async () => {
       mockExtensionMissing()
 
@@ -170,9 +172,16 @@ describe('FreighterConnect', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/Freighter not installed/)).toBeInTheDocument()
+        expect(screen.getByRole('link', { name: /Install Freighter/i })).toHaveAttribute(
+          'href',
+          'https://www.freighter.app/'
+        )
+        expect(screen.getByRole('button', { name: /check again/i })).toBeInTheDocument()
       })
     })
 
+    it('allows retrying detection after extension is installed', async () => {
+      delete (window as any).freighter
     it('opens Freighter website when extension is not installed', async () => {
       mockExtensionMissing()
       const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
@@ -182,10 +191,23 @@ describe('FreighterConnect', () => {
       fireEvent.click(await screen.findByRole('button', { name: /Connect Freighter/ }))
 
       await waitFor(() => {
-        expect(windowOpenSpy).toHaveBeenCalledWith('https://www.freighter.app/', '_blank')
+        expect(screen.getByRole('button', { name: /check again/i })).toBeInTheDocument()
       })
 
-      windowOpenSpy.mockRestore()
+      // Simulate extension installation
+      const mockPublicKey = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+      ;(window as any).freighter = {
+        isConnected: vi.fn().mockResolvedValue(true),
+        getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
+        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
+      }
+
+      fireEvent.click(screen.getByRole('button', { name: /check again/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText(/GAAA\.\.\.AAAA/)).toBeInTheDocument()
+        expect(screen.getByText('TESTNET')).toBeInTheDocument()
+      })
     })
   })
 
