@@ -1,4 +1,5 @@
 import { Network } from '@/types'
+import { StrKey } from '@stellar/stellar-sdk'
 
 export const HORIZON_URLS: Record<Network, string> = {
   mainnet: 'https://horizon.stellar.org',
@@ -72,13 +73,37 @@ export function isNetwork(value: string | undefined): value is Network {
   return value === 'mainnet' || value === 'testnet' || value === 'futurenet'
 }
 
+/**
+ * Maps Freighter network strings (e.g. PUBLIC, TESTNET, FUTURENET) to the app Network type (#8).
+ */
+export function mapFreighterNetwork(freighterNetwork: string | null | undefined): Network | null {
+  if (!freighterNetwork) return null
+  const normalized = freighterNetwork.trim().toUpperCase()
+  switch (normalized) {
+    case 'PUBLIC':
+    case 'MAINNET':
+      return 'mainnet'
+    case 'TESTNET':
+      return 'testnet'
+    case 'FUTURENET':
+      return 'futurenet'
+    default:
+      return null
+  }
+}
+
 export function truncateId(id: string, chars = 8): string {
   if (id.length <= chars * 2 + 3) return id
   return `${id.slice(0, chars)}...${id.slice(-chars)}`
 }
 
 export function isValidContractId(id: string): boolean {
-  return /^C[A-Z2-7]{55}$/.test(id)
+  if (!id || typeof id !== 'string') return false
+  try {
+    return StrKey.isValidContract(id)
+  } catch {
+    return false
+  }
 }
 
 export function isValidUrl(url: string): boolean {
