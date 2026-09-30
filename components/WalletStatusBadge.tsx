@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { readFreighterConnection } from '@/lib/freighter'
 
 /**
  * `checking` is the initial state: the extension's answer is unknown until
@@ -13,6 +14,24 @@ export default function WalletStatusBadge() {
   const [status, setStatus] = useState<WalletStatus>('checking')
 
   useEffect(() => {
+    let cancelled = false
+
+    readFreighterConnection()
+      .then((connection) => {
+        if (cancelled) return
+        if (!connection) {
+          setStatus('unavailable')
+          return
+        }
+        setStatus(connection.publicKey ? 'connected' : 'disconnected')
+      })
+      .catch(() => {
+        if (!cancelled) setStatus('disconnected')
+      })
+
+    return () => {
+      cancelled = true
+    }
     let active = true
 
     async function check() {

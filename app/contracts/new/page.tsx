@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import { AlertPayload, AlertRule, Network, WatchedContract } from '@/types'
 import { isValidContractId, isValidUrl } from '@/lib/stellar'
 import { syncSaveContract } from '@/lib/contractSync'
+import { addContract, getContracts } from '@/lib/storage'
+import { sendTestWebhook } from '@/lib/api'
+import { getWalletNetwork, isNetworkMatch } from '@/lib/freighter'
 import { addContract, getContracts, saveContract } from '@/lib/storage'
 import { buildTestWebhookPayload, describeRule, sendTestWebhook } from '@/lib/api'
 import { generateWebhookSecret } from '@/lib/webhookSignature'
@@ -133,6 +136,21 @@ export default function NewContractPage() {
       isValidUrl(webhookUrl.trim()) &&
       rules.length > 0
     )
+  }
+
+  async function checkNetworkMismatch(selectedNetwork: Network) {
+    const walletNetwork = await getWalletNetwork()
+    if (!walletNetwork) {
+      setNetworkWarning(null)
+      return
+    }
+    if (isNetworkMatch(selectedNetwork, walletNetwork)) {
+      setNetworkWarning(null)
+    } else {
+      setNetworkWarning(
+        `Your wallet is on ${walletNetwork}, but this contract is on ${selectedNetwork.toUpperCase()}`
+      )
+    }
   }
 
   async function handleSave() {

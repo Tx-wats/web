@@ -1,14 +1,69 @@
 import { vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { getAddress, getNetworkDetails, isConnected, requestAccess } from '@stellar/freighter-api'
 import FreighterConnect from '@/components/FreighterConnect'
+
+vi.mock('@stellar/freighter-api', () => ({
+  isConnected: vi.fn(),
+  getAddress: vi.fn(),
+  getNetworkDetails: vi.fn(),
+  requestAccess: vi.fn(),
+  signTransaction: vi.fn(),
+}))
+
+const mockIsConnected = vi.mocked(isConnected)
+const mockGetAddress = vi.mocked(getAddress)
+const mockGetNetworkDetails = vi.mocked(getNetworkDetails)
+const mockRequestAccess = vi.mocked(requestAccess)
+
+const MOCK_PUBLIC_KEY = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+const WALLET_STORAGE_KEY = 'freighter_public_key'
+
+/** Shape of the `error` field the package returns instead of throwing. */
+const EXTENSION_MISSING = { code: -1, message: 'Extension not detected' }
+
+/** Extension installed and approved for this site. */
+function mockConnectedSession(publicKey = MOCK_PUBLIC_KEY) {
+  mockIsConnected.mockResolvedValue({ isConnected: true })
+  mockGetAddress.mockResolvedValue({ address: publicKey })
+  mockGetNetworkDetails.mockResolvedValue({
+    network: 'TESTNET',
+    networkUrl: 'https://horizon-testnet.stellar.org',
+    networkPassphrase: 'Test SDF Network ; September 2015',
+  })
+  mockRequestAccess.mockResolvedValue({ address: publicKey })
+}
+
+/** Extension installed, but the user has not connected this site yet. */
+function mockDisconnectedSession() {
+  mockIsConnected.mockResolvedValue({ isConnected: false })
+  mockGetAddress.mockResolvedValue({ address: '' })
+  mockGetNetworkDetails.mockResolvedValue({
+    network: 'TESTNET',
+    networkUrl: 'https://horizon-testnet.stellar.org',
+    networkPassphrase: 'Test SDF Network ; September 2015',
+  })
+  mockRequestAccess.mockResolvedValue({ address: MOCK_PUBLIC_KEY })
+}
+
+/** No extension: the API reports an error instead of a connection state. */
+function mockExtensionMissing() {
+  mockIsConnected.mockResolvedValue({ isConnected: false, error: EXTENSION_MISSING })
+  mockGetAddress.mockResolvedValue({ address: '', error: EXTENSION_MISSING })
+  mockGetNetworkDetails.mockResolvedValue({
+    network: '',
+    networkUrl: '',
+    networkPassphrase: '',
+    error: EXTENSION_MISSING,
+  })
+  mockRequestAccess.mockResolvedValue({ address: '', error: EXTENSION_MISSING })
+}
 
 describe('FreighterConnect', () => {
   beforeEach(() => {
-    delete (window as any).freighter
-    delete (window as any).__freighterPublicKey
-    // the component persists the key, so without this later tests start connected
     localStorage.clear()
     vi.clearAllMocks()
+    mockDisconnectedSession()
   })
 
   describe('connection states', () => {
@@ -20,12 +75,7 @@ describe('FreighterConnect', () => {
     })
 
     it('renders connected state with public key', async () => {
-      const mockPublicKey = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      ;(window as any).freighter = {
-        isConnected: vi.fn().mockResolvedValue(true),
-        getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
-        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
-      }
+      mockConnectedSession()
 
       render(<FreighterConnect />)
 
@@ -35,12 +85,7 @@ describe('FreighterConnect', () => {
     })
 
     it('shows disconnect button when connected', async () => {
-      const mockPublicKey = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      ;(window as any).freighter = {
-        isConnected: vi.fn().mockResolvedValue(true),
-        getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
-        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
-      }
+      mockConnectedSession()
 
       render(<FreighterConnect />)
 
@@ -50,12 +95,7 @@ describe('FreighterConnect', () => {
     })
 
     it('disconnects when disconnect button is clicked', async () => {
-      const mockPublicKey = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      ;(window as any).freighter = {
-        isConnected: vi.fn().mockResolvedValue(true),
-        getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
-        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
-      }
+      mockConnectedSession()
 
       render(<FreighterConnect />)
 
@@ -73,11 +113,7 @@ describe('FreighterConnect', () => {
 
   describe('rejection handling', () => {
     it('shows error when user rejects connection', async () => {
-      ;(window as any).freighter = {
-        isConnected: vi.fn().mockResolvedValue(false),
-        getPublicKey: vi.fn().mockRejectedValue(new Error('User rejected')),
-        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
-      }
+      mockRequestAccess.mockRejectedValue(new Error('User rejected'))
 
       render(<FreighterConnect />)
 
@@ -88,15 +124,25 @@ describe('FreighterConnect', () => {
       })
     })
 
+    it('shows the API error message when the wallet returns one', async () => {
+      mockRequestAccess.mockResolvedValue({
+        address: '',
+        error: { code: -1, message: 'User declined access' },
+      })
+
+      render(<FreighterConnect />)
+
+      fireEvent.click(await screen.findByRole('button', { name: /Connect Freighter/ }))
+
+      await waitFor(() => {
+        expect(screen.getByText('User declined access')).toBeInTheDocument()
+      })
+    })
+
     it('clears error when user tries again', async () => {
-      ;(window as any).freighter = {
-        isConnected: vi.fn().mockResolvedValue(false),
-        getPublicKey: vi
-          .fn()
-          .mockRejectedValueOnce(new Error('User rejected'))
-          .mockResolvedValueOnce('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'),
-        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
-      }
+      mockRequestAccess
+        .mockRejectedValueOnce(new Error('User rejected'))
+        .mockResolvedValueOnce({ address: MOCK_PUBLIC_KEY })
 
       render(<FreighterConnect />)
 
@@ -109,14 +155,14 @@ describe('FreighterConnect', () => {
       fireEvent.click(await screen.findByRole('button', { name: /Connect Freighter/ }))
 
       await waitFor(() => {
-        expect(screen.queryByText('Connection rejected')).not.toBeInTheDocument()
+        expect(screen.queryByText('User rejected')).not.toBeInTheDocument()
       })
     })
   })
 
   describe('unavailable extension', () => {
     it('shows error when extension is not installed', async () => {
-      delete (window as any).freighter
+      mockExtensionMissing()
 
       render(<FreighterConnect />)
 
@@ -128,7 +174,7 @@ describe('FreighterConnect', () => {
     })
 
     it('opens Freighter website when extension is not installed', async () => {
-      delete (window as any).freighter
+      mockExtensionMissing()
       const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
 
       render(<FreighterConnect />)
@@ -145,48 +191,69 @@ describe('FreighterConnect', () => {
 
   describe('callbacks', () => {
     it('calls onConnect callback when connection succeeds', async () => {
-      const mockPublicKey = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
       const onConnect = vi.fn()
-      ;(window as any).freighter = {
-        isConnected: vi.fn().mockResolvedValue(false),
-        getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
-        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
-      }
+      mockDisconnectedSession()
 
       render(<FreighterConnect onConnect={onConnect} />)
 
       fireEvent.click(await screen.findByRole('button', { name: /Connect Freighter/ }))
 
       await waitFor(() => {
-        expect(onConnect).toHaveBeenCalledWith(mockPublicKey)
+        expect(onConnect).toHaveBeenCalledWith(MOCK_PUBLIC_KEY)
       })
     })
 
     it('calls onConnect callback on initial mount if already connected', async () => {
-      const mockPublicKey = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
       const onConnect = vi.fn()
-      ;(window as any).freighter = {
-        isConnected: vi.fn().mockResolvedValue(true),
-        getPublicKey: vi.fn().mockResolvedValue(mockPublicKey),
-        getNetwork: vi.fn().mockResolvedValue('TESTNET'),
-      }
+      mockConnectedSession()
 
       render(<FreighterConnect onConnect={onConnect} />)
 
       await waitFor(() => {
-        expect(onConnect).toHaveBeenCalledWith(mockPublicKey)
+        expect(onConnect).toHaveBeenCalledWith(MOCK_PUBLIC_KEY)
       })
+    })
+  })
+
+  describe('wallet state is not persisted', () => {
+    it('never writes the connected public key to local storage', async () => {
+      mockDisconnectedSession()
+      const onConnect = vi.fn()
+
+      render(<FreighterConnect onConnect={onConnect} />)
+
+      fireEvent.click(await screen.findByRole('button', { name: /Connect Freighter/ }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Disconnect')).toBeInTheDocument()
+      })
+      expect(onConnect).toHaveBeenCalledWith(MOCK_PUBLIC_KEY)
+      expect(localStorage.getItem(WALLET_STORAGE_KEY)).toBeNull()
+    })
+
+    it('does not leave a stale key behind after disconnecting', async () => {
+      mockConnectedSession()
+
+      render(<FreighterConnect />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Disconnect')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByText('Disconnect'))
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Connect Freighter/ })).toBeInTheDocument()
+      })
+      expect(localStorage.getItem(WALLET_STORAGE_KEY)).toBeNull()
     })
   })
 
   describe('loading state', () => {
     it('disables button while connecting', async () => {
-      ;(window as any).freighter = {
-        isConnected: vi.fn().mockResolvedValue(false),
-        getPublicKey: vi.fn().mockImplementation(
-          () => new Promise((resolve) => setTimeout(() => resolve('GAAAA...'), 100))
-        ),
-      }
+      mockRequestAccess.mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve({ address: MOCK_PUBLIC_KEY }), 100))
+      )
 
       render(<FreighterConnect />)
 

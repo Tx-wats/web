@@ -1,20 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { DEFAULT_FREIGHTER_MOCK, installFreighterMock } from './freighter-mock';
 
 test.describe('Freighter Wallet Connection', () => {
   test.beforeEach(async ({ page, context }) => {
-    // Mock Freighter wallet extension
-    await context.addInitScript(() => {
-      window.freighter = {
-        isConnected: () => Promise.resolve(false),
-        getPublicKey: () => Promise.resolve('GBVFLWXWZNMSMLSJT2YHKVJNLM3FBRNJMZ2QZUPMHSWOMWHP2BYSBUE'),
-        signTransaction: (xdr: string) =>
-          Promise.resolve({
-            envelope_xdr: xdr,
-            soroban_authorization_entries: [],
-          }),
-        isAllowed: () => Promise.resolve(true),
-      };
-    });
+    // Mock the Freighter extension (accessed via @stellar/freighter-api)
+    await context.addInitScript(installFreighterMock, DEFAULT_FREIGHTER_MOCK);
   });
 
   test('should display connect wallet button on home page', async ({ page }) => {
@@ -45,19 +35,13 @@ test.describe('Freighter Wallet Connection', () => {
   });
 });
 
-test.describe('Wallet Persistence', () => {
+test.describe('Wallet Connection Persistence', () => {
   test('should persist wallet connection state across page reloads', async ({ page, context }) => {
-    await context.addInitScript(() => {
-      window.freighter = {
-        isConnected: () => Promise.resolve(true),
-        getPublicKey: () => Promise.resolve('GBVFLWXWZNMSMLSJT2YHKVJNLM3FBRNJMZ2QZUPMHSWOMWHP2BYSBUE'),
-        signTransaction: (xdr: string) =>
-          Promise.resolve({
-            envelope_xdr: xdr,
-            soroban_authorization_entries: [],
-          }),
-        isAllowed: () => Promise.resolve(true),
-      };
+    // The connection lives in the extension, not in the app, so a reload with
+    // the extension still reporting "connected" keeps the app connected.
+    await context.addInitScript(installFreighterMock, {
+      ...DEFAULT_FREIGHTER_MOCK,
+      connected: true,
     });
 
     await page.goto('/');
@@ -66,5 +50,17 @@ test.describe('Wallet Persistence', () => {
     // Should still show wallet as connected (no connect button)
     const connectButton = page.getByRole('button', { name: /connect.*freighter/i });
     await expect(connectButton).not.toBeVisible();
+  });
+
+  test('should not cache the public key in local storage', async ({ page, context }) => {
+    await context.addInitScript(installFreighterMock, {
+      ...DEFAULT_FREIGHTER_MOCK,
+      connected: true,
+    });
+
+    await page.goto('/');
+
+    // The connected key must live only in the extension, never in the browser.
+    expect(await page.evaluate(() => window.localStorage.getItem('freighter_public_key'))).toBeNull();
   });
 });
