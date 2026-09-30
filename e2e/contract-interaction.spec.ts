@@ -1,20 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { DEFAULT_FREIGHTER_MOCK, installFreighterMock } from './freighter-mock';
+
+const CONNECTED_MOCK = { ...DEFAULT_FREIGHTER_MOCK, connected: true };
 
 test.describe('Contract Interaction and Rules', () => {
   test.beforeEach(async ({ page, context }) => {
-    // Mock Freighter as connected
-    await context.addInitScript(() => {
-      window.freighter = {
-        isConnected: () => Promise.resolve(true),
-        getPublicKey: () => Promise.resolve('GBVFLWXWZNMSMLSJT2YHKVJNLM3FBRNJMZ2QZUPMHSWOMWHP2BYSBUE'),
-        signTransaction: (xdr: string) =>
-          Promise.resolve({
-            envelope_xdr: xdr,
-            soroban_authorization_entries: [],
-          }),
-        isAllowed: () => Promise.resolve(true),
-      };
-    });
+    // Mock Freighter (accessed via @stellar/freighter-api) as connected
+    await context.addInitScript(installFreighterMock, CONNECTED_MOCK);
   });
 
   test('should display contract list page', async ({ page }) => {
@@ -66,18 +58,7 @@ test.describe('Contract Interaction and Rules', () => {
 
 test.describe('Alert Rules Management', () => {
   test.beforeEach(async ({ page, context }) => {
-    await context.addInitScript(() => {
-      window.freighter = {
-        isConnected: () => Promise.resolve(true),
-        getPublicKey: () => Promise.resolve('GBVFLWXWZNMSMLSJT2YHKVJNLM3FBRNJMZ2QZUPMHSWOMWHP2BYSBUE'),
-        signTransaction: (xdr: string) =>
-          Promise.resolve({
-            envelope_xdr: xdr,
-            soroban_authorization_entries: [],
-          }),
-        isAllowed: () => Promise.resolve(true),
-      };
-    });
+    await context.addInitScript(installFreighterMock, CONNECTED_MOCK);
   });
 
   test('should add a new alert rule', async ({ page }) => {

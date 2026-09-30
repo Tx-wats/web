@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { readFreighterConnection } from '@/lib/freighter'
 
 export function useFreighterConnection() {
   const [isConnected, setIsConnected] = useState(false)
@@ -55,6 +56,15 @@ export function useFreighterConnection() {
       if (!document.hidden) {
         checkConnection()
       }
+  async function checkConnection() {
+    try {
+      const connection = await readFreighterConnection()
+      setPublicKey(connection?.publicKey ?? null)
+      setIsConnected(Boolean(connection?.publicKey))
+    } catch {
+      setIsConnected(false)
+    } finally {
+      setLoading(false)
     }
 
     const intervalId = setInterval(onSync, 5000)

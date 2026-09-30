@@ -3,13 +3,26 @@
 import { useState, useEffect, useCallback } from 'react'
 
 const WALLET_STORAGE_KEY = 'freighter_public_key'
+import { useState, useEffect } from 'react'
+import {
+  connectFreighter,
+  FreighterUnavailableError,
+  openFreighterInstallPage,
+  readFreighterConnection,
+} from '@/lib/freighter'
 
 interface FreighterConnectProps {
   className?: string
   onConnect?: (publicKey: string) => void
+  /** Fired when the user disconnects from this page. */
+  onDisconnect?: () => void
 }
 
-export default function FreighterConnect({ onConnect, className = '' }: FreighterConnectProps) {
+export default function FreighterConnect({
+  onConnect,
+  onDisconnect,
+  className = '',
+}: FreighterConnectProps) {
   const [publicKey, setPublicKey] = useState<string | null>(null)
   const [network, setNetwork] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -38,6 +51,10 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
       } else {
         setPublicKey(null)
         setNetwork(null)
+      const connection = await readFreighterConnection()
+      if (connection?.publicKey) {
+        setPublicKey(connection.publicKey)
+        onConnect?.(connection.publicKey)
       }
     } catch {
       // Connection check failed
@@ -129,19 +146,28 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
       window.__freighterPublicKey = key
       localStorage.setItem(WALLET_STORAGE_KEY, key)
       onConnect?.(key)
+      const session = await connectFreighter()
+      setPublicKey(session.publicKey)
+      onConnect?.(session.publicKey)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Connection rejected'
-      setError(message)
+      if (err instanceof FreighterUnavailableError) {
+        openFreighterInstallPage()
+      }
+      setError(err instanceof Error ? err.message : 'Connection rejected')
     } finally {
       setLoading(false)
       setIsConnecting(false)
     }
   }
 
+  // The extension stays authorised after this — this only clears the local view
+  // of the session. Nothing is persisted: the wallet is the source of truth, so
+  // a key cached in localStorage would outlive an account switch in Freighter.
   function disconnect() {
     setPublicKey(null)
     setNetwork(null)
     localStorage.removeItem(WALLET_STORAGE_KEY)
+    onDisconnect?.()
   }
 
   const handleInstallClick = () => {
