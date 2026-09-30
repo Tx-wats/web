@@ -180,12 +180,15 @@ export async function getContractData(
 
 ### Freighter wallet
 
-`components/FreighterConnect.tsx` wraps the `window.freighter` browser extension API. To get the connected public key anywhere in the app:
+`components/FreighterConnect.tsx` wraps the [`@stellar/freighter-api`](https://www.npmjs.com/package/@stellar/freighter-api) package, which talks to the browser extension for us. `lib/freighter.ts` is the only module that imports the package, and it is what the rest of the app uses to read the connected public key and network:
 
 ```ts
-// Read the key after connection (stored by FreighterConnect via onConnect callback)
-const publicKey = await window.freighter?.getPublicKey()
-const network   = await window.freighter?.getNetwork()   // e.g. "TESTNET"
+import { readFreighterConnection, getWalletNetwork } from '@/lib/freighter'
+
+// Read the key after connection (passed by FreighterConnect via onConnect callback)
+const connection = await readFreighterConnection()
+const publicKey  = connection?.publicKey ?? null
+const network    = await getWalletNetwork()   // e.g. "TESTNET"
 ```
 
 Wallet state is shared through a `txwatch:wallet` CustomEvent rather than per-component state, so connecting or disconnecting from one button updates every other wallet-aware component. Prefer the hook over reading the global directly:
@@ -202,9 +205,10 @@ To sign and submit a transaction:
 
 ```ts
 import { Transaction, Networks } from '@stellar/stellar-sdk'
+import { signWithFreighter } from '@/lib/freighter'
 
 // Build your XDR transaction, then:
-const signed = await window.freighter?.signTransaction(txXdr, {
+const signed = await signWithFreighter(txXdr, {
   networkPassphrase: Networks.TESTNET,
 })
 ```
