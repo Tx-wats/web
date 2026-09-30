@@ -35,6 +35,7 @@ This document maps key files and directories to their functional areas, helping 
 | File | Responsibility |
 |---|---|
 | `stellar.ts` | Stellar integration — Horizon URLs, Soroban RPC, contract validation, explorer links |
+| `freighter.ts` | Wallet integration — the only module that imports `@stellar/freighter-api` (connect, address, network, signing) |
 | `storage.ts` | localStorage persistence — contract registry, settings, cache |
 | `api.ts` | Backend communication — fetch wrapper, webhook test, API calls |
 | `contractsApi.ts` | Contract API — contract-specific data fetching |
@@ -97,7 +98,7 @@ This document maps key files and directories to their functional areas, helping 
 ### Wallet Integration
 
 **Primary**: `components/FreighterConnect.tsx`  
-**Secondary**: `lib/stellar.ts` (Freighter API helpers)  
+**Secondary**: `lib/freighter.ts` (`@stellar/freighter-api` wrapper)  
 **Related**: `app/layout.tsx` (provider setup)
 
 ### Contract Management

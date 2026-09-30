@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { links as repoLinks } from '@/lib/links'
+import WalletStatusBadge from '@/components/WalletStatusBadge'
+import FreighterConnect from '@/components/FreighterConnect'
 
 const navLinks = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -70,6 +72,13 @@ export default function MobileNav() {
                 )
               )}
             </nav>
+            <div className="pt-4 border-t border-zinc-800 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-zinc-400 font-medium">Wallet Status</span>
+                <WalletStatusBadge />
+              </div>
+              <FreighterConnect />
+            </div>
           </div>
         </>
       )}
