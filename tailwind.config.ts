@@ -45,10 +45,17 @@ const config: Config = {
       },
       animation: {
         "fade-in": "fadeIn 0.2s ease-in-out",
+        // #112: Toast enter animation (replaces tailwindcss-animate plugin classes)
+        "toast-in": "toastIn 0.3s ease-out",
       },
       keyframes: {
         fadeIn: {
           "0%": { opacity: "0", transform: "translateY(4px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        // #112: Fade in + slide up from bottom-4 (16px)
+        toastIn: {
+          "0%": { opacity: "0", transform: "translateY(1rem)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
       },

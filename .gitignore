@@ -41,5 +41,20 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# os
+Thumbs.db
+
 # project notes
 vrickish.md
