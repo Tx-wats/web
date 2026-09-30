@@ -9,7 +9,10 @@ declare global {
       isConnected: () => Promise<boolean>
       getPublicKey: () => Promise<string>
       getNetwork: () => Promise<string>
-      signTransaction: (xdr: string, options: { networkPassphrase: string }) => Promise<string>
+      signTransaction: (
+        xdr: string,
+        options: { networkPassphrase: string }
+      ) => Promise<string>
     }
     /** Last connected public key, mirrored for components that mount later. */
     __freighterPublicKey?: string | null
@@ -96,6 +99,10 @@ export function useFreighter() {
       broadcastWalletChange(publicKey)
       setState({ publicKey, network, loading: false, error: null })
     } catch {
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        error: 'Connection rejected',
       setState((prev) => ({ ...prev, loading: false, error: 'Connection rejected' }))
       setState((prev) => ({
         ...prev,
