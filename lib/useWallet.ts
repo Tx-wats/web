@@ -1,3 +1,9 @@
+'use client'
+
+import { useWalletState } from '@/hooks/useWalletState'
+
+export function useWallet() {
+  const { publicKey } = useWalletState()
 import { useState, useEffect } from 'react'
 import { readFreighterConnection } from '@/lib/freighter'
 
@@ -25,5 +31,5 @@ export function useWallet() {
     }
   }, [])
 
-  return { publicKey, isConnected }
+  return { publicKey, isConnected: Boolean(publicKey) }
 }

@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+import { useWalletState } from '@/hooks/useWalletState'
 import { useState, useEffect, useCallback } from 'react'
 
 const WALLET_STORAGE_KEY = 'freighter_public_key'
@@ -18,6 +20,8 @@ interface FreighterConnectProps {
   onDisconnect?: () => void
 }
 
+export default function FreighterConnect({ onConnect, className = '' }: FreighterConnectProps) {
+  const { publicKey, initialized, publish } = useWalletState()
 export default function FreighterConnect({
   onConnect,
   onDisconnect,
@@ -29,8 +33,11 @@ export default function FreighterConnect({
   const [error, setError] = useState<string | null>(null)
   const [missingExtension, setMissingExtension] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
-  const [isInitializing, setIsInitializing] = useState(true)
 
+  // Fired off the shared state rather than off the click handler, so a
+  // connection made through any other button still notifies the parent.
+  useEffect(() => {
+    if (publicKey) onConnect?.(publicKey)
   const checkConnection = useCallback(async () => {
     try {
       if (!window.freighter) {
@@ -141,6 +148,7 @@ export default function FreighterConnect({
         return
       }
 
+      publish(key)
       setPublicKey(key)
       setNetwork(net)
       window.__freighterPublicKey = key
@@ -164,6 +172,7 @@ export default function FreighterConnect({
   // of the session. Nothing is persisted: the wallet is the source of truth, so
   // a key cached in localStorage would outlive an account switch in Freighter.
   function disconnect() {
+    publish(null)
     setPublicKey(null)
     setNetwork(null)
     localStorage.removeItem(WALLET_STORAGE_KEY)
@@ -178,7 +187,7 @@ export default function FreighterConnect({
     window.addEventListener('focus', onFocusBack)
   }
 
-  if (isInitializing) {
+  if (!initialized) {
     return (
       <div className={`flex items-center gap-2 ${className}`}>
         <div className="w-24 h-9 rounded-lg bg-zinc-800 animate-pulse" />

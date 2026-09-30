@@ -132,6 +132,12 @@ const signedXdr = await signWithFreighter(txXdr, {
 - UI for connected/disconnected states
 - Disconnect button
 
+Connection state is not local to the button. `hooks/useWalletState.ts` probes the
+extension on mount and then subscribes to a `txwatch:wallet` CustomEvent, so the
+header button, the landing-page button, `WalletStatusBadge` and any form gate all
+show the same state. Disconnecting from one of them updates all of them, clears
+`localStorage['freighter_public_key']` and removes `window.__freighterPublicKey`.
+
 Usage:
 
 ```tsx
@@ -146,6 +152,13 @@ export default function MyPage() {
 }
 ```
 
+To react to wallet changes without rendering a button:
+
+```tsx
+import { useWalletState } from '@/hooks/useWalletState'
+
+const { publicKey, publish } = useWalletState()
+```
 ### Nothing is persisted
 
 The connected public key is deliberately **not** written to `localStorage`. The

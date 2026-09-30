@@ -191,6 +191,16 @@ const publicKey  = connection?.publicKey ?? null
 const network    = await getWalletNetwork()   // e.g. "TESTNET"
 ```
 
+Wallet state is shared through a `txwatch:wallet` CustomEvent rather than per-component state, so connecting or disconnecting from one button updates every other wallet-aware component. Prefer the hook over reading the global directly:
+
+```ts
+import { useWalletState } from '@/hooks/useWalletState'
+
+const { publicKey, initialized, publish } = useWalletState()
+```
+
+`publish(key)` connects and `publish(null)` disconnects; both update `localStorage` and `window.__freighterPublicKey` and notify every other subscriber.
+
 To sign and submit a transaction:
 
 ```ts
