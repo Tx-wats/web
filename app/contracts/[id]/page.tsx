@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { WatchedContract, AlertPayload, AlertRule, isRuleEnabled } from '@/types'
 import { syncSaveContract, syncDeleteContract } from '@/lib/contractSync'
 import { getContract, deleteContract, getAlerts, saveContract, seedMockAlerts } from '@/lib/storage'
+import { truncateId, explorerContractUrl, isValidUrl, mapFreighterNetwork } from '@/lib/stellar'
+import { getContract, deleteContract, getAlerts, saveContract, seedMockAlerts, getContracts } from '@/lib/storage'
 import { truncateId, explorerContractUrl, isValidUrl } from '@/lib/stellar'
 import { formatDate, formatRuleSummary } from '@/lib/format'
 import { useAnalytics } from '@/lib/useAnalytics'
@@ -38,6 +40,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
   const [editedWebhookUrl, setEditedWebhookUrl] = useState('')
   const [editedNetwork, setEditedNetwork] = useState<WatchedContract['network']>('testnet')
   const [metadataError, setMetadataError] = useState<string | null>(null)
+  const [editedLabelWarning, setEditedLabelWarning] = useState<string | null>(null)
 
   const sync = useAlertSync(contract?.contract_id, contract?.network, (fresh) => {
     setAlerts(getAlerts(contract?.contract_id ?? params.id))
@@ -55,6 +58,44 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
     setAlerts(getAlerts(c.contract_id))
     setMounted(true)
   }, [params.id, router])
+
+  const [walletNetworkMismatch, setWalletNetworkMismatch] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function checkWalletNetwork() {
+      if (typeof window === 'undefined' || !window.freighter || !contract) return
+      try {
+        const connected = await window.freighter.isConnected()
+        if (!connected) {
+          setWalletNetworkMismatch(null)
+          return
+        }
+        const rawNet = await window.freighter.getNetwork()
+        const mappedNet = mapFreighterNetwork(rawNet)
+        if (mappedNet && mappedNet !== contract.network) {
+          setWalletNetworkMismatch(
+            `Wallet is on ${rawNet}, but this contract is monitored on ${contract.network.toUpperCase()}`
+          )
+        } else {
+          setWalletNetworkMismatch(null)
+        }
+      } catch {
+        setWalletNetworkMismatch(null)
+      }
+    }
+
+    checkWalletNetwork()
+
+    const onSync = () => {
+      if (!document.hidden) checkWalletNetwork()
+    }
+    window.addEventListener('focus', onSync)
+    document.addEventListener('visibilitychange', onSync)
+    return () => {
+      window.removeEventListener('focus', onSync)
+      document.removeEventListener('visibilitychange', onSync)
+    }
+  }, [contract])
 
   function handleDelete() {
     void syncDeleteContract(params.id)
@@ -112,6 +153,7 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
     setEditedWebhookUrl(contract!.webhook_url)
     setEditedNetwork(contract!.network)
     setMetadataError(null)
+    setEditedLabelWarning(null)
     setShowEditMetadata(true)
     trackEvent('metadata_edit_opened', { contractId: params.id })
   }
@@ -221,6 +263,18 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
 
   return (
     <div className="space-y-8 max-w-4xl">
+      {walletNetworkMismatch && (
+        <div
+          data-testid="network-mismatch-banner"
+          className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-sm text-amber-300 flex items-center gap-2"
+        >
+          <svg className="w-5 h-5 flex-shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span>{walletNetworkMismatch}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="space-y-1 min-w-0">
@@ -533,9 +587,19 @@ export default function ContractDetailPage({ params }: { params: { id: string } 
               <label className="text-sm text-zinc-400">Label</label>
               <input
                 value={editedLabel}
-                onChange={(e) => setEditedLabel(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setEditedLabel(val)
+                  const trimmed = val.trim().toLowerCase()
+                  if (trimmed && getContracts().some((c) => c.id !== contract?.id && c.label.trim().toLowerCase() === trimmed)) {
+                    setEditedLabelWarning('A contract with this label already exists')
+                  } else {
+                    setEditedLabelWarning(null)
+                  }
+                }}
                 className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
               />
+              {editedLabelWarning && <p className="text-xs text-amber-400">{editedLabelWarning}</p>}
             </div>
 
             <div className="space-y-1">

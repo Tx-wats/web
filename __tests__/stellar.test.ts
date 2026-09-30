@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import { isValidContractId, normalizeContractId, contractExists } from '@/lib/stellar'
+import { isValidContractId, mapFreighterNetwork } from '@/lib/stellar'
 
 describe('isValidContractId', () => {
   it('accepts valid contract IDs', () => {
@@ -32,6 +33,38 @@ describe('isValidContractId', () => {
     expect(isValidContractId('CBCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVWXYZ234!')).toBe(
       false
     )
+  })
+
+  it('rejects contract IDs with invalid checksum even if regex format matches', () => {
+    // Matches /^C[A-Z2-7]{55}$/ but fails CRC16 checksum
+    expect(isValidContractId('CDSO4GGZH7KBUQYKOIQDCMCFSRYEPOVDUX7Z4IB5TWNTLT2GDRKDQOYQ')).toBe(
+      false
+    )
+  })
+})
+
+describe('mapFreighterNetwork', () => {
+  it('maps PUBLIC and MAINNET to mainnet', () => {
+    expect(mapFreighterNetwork('PUBLIC')).toBe('mainnet')
+    expect(mapFreighterNetwork('public')).toBe('mainnet')
+    expect(mapFreighterNetwork('MAINNET')).toBe('mainnet')
+  })
+
+  it('maps TESTNET to testnet', () => {
+    expect(mapFreighterNetwork('TESTNET')).toBe('testnet')
+    expect(mapFreighterNetwork('testnet')).toBe('testnet')
+  })
+
+  it('maps FUTURENET to futurenet', () => {
+    expect(mapFreighterNetwork('FUTURENET')).toBe('futurenet')
+    expect(mapFreighterNetwork('futurenet')).toBe('futurenet')
+  })
+
+  it('returns null for unknown or empty networks', () => {
+    expect(mapFreighterNetwork(null)).toBeNull()
+    expect(mapFreighterNetwork(undefined)).toBeNull()
+    expect(mapFreighterNetwork('')).toBeNull()
+    expect(mapFreighterNetwork('LOCALNET')).toBeNull()
   })
 })
 
