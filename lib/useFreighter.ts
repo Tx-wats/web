@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { broadcastWalletChange, subscribeWallet } from '@/lib/walletEvents'
 
 declare global {
   interface Window {
@@ -38,6 +39,7 @@ export function useFreighter() {
           window.freighter!.getPublicKey(),
           window.freighter!.getNetwork(),
         ])
+        broadcastWalletChange(publicKey)
         setState({ publicKey, network, loading: false, error: null })
       }
     } catch {
@@ -48,6 +50,14 @@ export function useFreighter() {
   useEffect(() => {
     initialize()
   }, [initialize])
+
+  useEffect(
+    () =>
+      subscribeWallet((publicKey) => {
+        setState((prev) => ({ ...prev, publicKey, network: null }))
+      }),
+    []
+  )
 
   const connect = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }))
@@ -65,6 +75,7 @@ export function useFreighter() {
         window.freighter.getPublicKey(),
         window.freighter.getNetwork(),
       ])
+      broadcastWalletChange(publicKey)
       setState({ publicKey, network, loading: false, error: null })
     } catch {
       setState((prev) => ({ ...prev, loading: false, error: 'Connection rejected' }))
@@ -72,6 +83,7 @@ export function useFreighter() {
   }, [])
 
   const disconnect = useCallback(() => {
+    broadcastWalletChange(null)
     setState({ publicKey: null, network: null, loading: false, error: null })
   }, [])
 

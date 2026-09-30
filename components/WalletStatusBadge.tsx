@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { subscribeWallet } from '@/lib/walletEvents'
 
 type WalletStatus = 'connected' | 'disconnected' | 'unavailable'
 
@@ -13,9 +14,21 @@ export default function WalletStatusBadge() {
       return
     }
 
+    let cancelled = false
     window.freighter.isConnected().then((connected) => {
-      setStatus(connected ? 'connected' : 'disconnected')
+      if (!cancelled) setStatus(connected ? 'connected' : 'disconnected')
     })
+
+    // The extension probe above only covers this mount. A connect or
+    // disconnect triggered anywhere else in the app arrives on the event bus.
+    const unsubscribe = subscribeWallet((publicKey) => {
+      setStatus(publicKey ? 'connected' : 'disconnected')
+    })
+
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [])
 
   const statusConfig = {

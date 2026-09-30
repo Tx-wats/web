@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-
-const WALLET_STORAGE_KEY = 'freighter_public_key'
+import { useEffect, useState } from 'react'
+import { useWalletState } from '@/hooks/useWalletState'
 
 interface FreighterConnectProps {
   className?: string
@@ -10,36 +9,16 @@ interface FreighterConnectProps {
 }
 
 export default function FreighterConnect({ onConnect, className = '' }: FreighterConnectProps) {
-  const [publicKey, setPublicKey] = useState<string | null>(null)
+  const { publicKey, initialized, publish } = useWalletState()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
-  const [isInitializing, setIsInitializing] = useState(true)
 
+  // Fired off the shared state rather than off the click handler, so a
+  // connection made through any other button still notifies the parent.
   useEffect(() => {
-    checkConnection()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  async function checkConnection() {
-    try {
-      if (!window.freighter) {
-        return
-      }
-
-      const connected = await window.freighter.isConnected()
-      if (connected) {
-        const key = await window.freighter.getPublicKey()
-        setPublicKey(key)
-        window.__freighterPublicKey = key
-        onConnect?.(key)
-      }
-    } catch {
-      // Connection check failed
-    } finally {
-      setIsInitializing(false)
-    }
-  }
+    if (publicKey) onConnect?.(publicKey)
+  }, [publicKey, onConnect])
 
   async function connect() {
     if (isConnecting) return
@@ -62,10 +41,7 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
         return
       }
 
-      setPublicKey(key)
-      window.__freighterPublicKey = key
-      localStorage.setItem(WALLET_STORAGE_KEY, key)
-      onConnect?.(key)
+      publish(key)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Connection rejected'
       setError(message)
@@ -76,11 +52,10 @@ export default function FreighterConnect({ onConnect, className = '' }: Freighte
   }
 
   function disconnect() {
-    setPublicKey(null)
-    localStorage.removeItem(WALLET_STORAGE_KEY)
+    publish(null)
   }
 
-  if (isInitializing) {
+  if (!initialized) {
     return (
       <div className={`flex items-center gap-2 ${className}`}>
         <div className="w-24 h-9 rounded-lg bg-zinc-800 animate-pulse" />
