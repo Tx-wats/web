@@ -81,4 +81,7 @@ export interface AlertPayload {
   amount?: number
   timestamp: number
   horizon_link: string
+  /** Set on simulated (test) deliveries so receivers can tell them from real
+   *  alerts. Mirrored by the `is_test` field of tx-watch-core's payload. */
+  is_test?: boolean
 }
