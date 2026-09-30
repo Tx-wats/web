@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import { useState } from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import FreighterConnect from '@/components/FreighterConnect'
 import WalletStatusBadge from '@/components/WalletStatusBadge'
@@ -124,6 +125,43 @@ describe('wallet state broadcast', () => {
     await waitFor(() => {
       expect(screen.getByText('Wallet required')).toBeInTheDocument()
     })
+  })
+
+  it('does not re-fire onConnect in a loop when the parent re-renders', async () => {
+    mockFreighter(false)
+    const onConnect = vi.fn()
+
+    // An inline arrow is a new function on every parent render, which is how
+    // real callers pass this callback. A parent that sets state from it must
+    // not be able to drive this component into a render loop.
+    function Parent() {
+      const [ticks, setTicks] = useState(0)
+      return (
+        <>
+          <FreighterConnect
+            onConnect={() => {
+              onConnect()
+              setTicks((t) => t + 1)
+            }}
+          />
+          <span data-testid="ticks">{ticks}</span>
+        </>
+      )
+    }
+
+    render(<Parent />)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Connect Freighter/ })
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Disconnect' })
+      ).toBeInTheDocument()
+    })
+    expect(onConnect).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('ticks')).toHaveTextContent('1')
   })
 
   it('leaves the badge unavailable when the extension is missing', () => {
