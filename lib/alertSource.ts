@@ -1,6 +1,8 @@
-import { apiFetch } from '@/lib/api'
+import { apiFetch, isApiConfigured } from '@/lib/api'
 import { addAlert, getAlerts } from '@/lib/storage'
 import type { AlertPayload, Network } from '@/types'
+
+export { isApiConfigured }
 
 /**
  * Assumed tx-watch-core contract (not verified against a live core):
@@ -14,10 +16,6 @@ export interface FetchAlertsOptions {
 }
 
 export const ALERT_POLL_INTERVAL_MS = 30000
-
-export function isApiConfigured(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_API_URL)
-}
 
 export async function fetchAlerts(
   contractId: string,

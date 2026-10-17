@@ -1,4 +1,4 @@
-import { apiFetch } from '@/lib/api'
+import { apiFetch, isApiConfigured } from '@/lib/api'
 import {
   FUNCTION_NAME_REGEX,
   SOROBAN_SYMBOL_MAX_LENGTH,
@@ -6,6 +6,8 @@ import {
   sanitizeAdminFunctionNames,
 } from '@/lib/soroban'
 import type { WatchedContract } from '@/types'
+
+export { isApiConfigured }
 
 /**
  * ASSUMED tx-watch-core REST routes (not verified against the core repo):
@@ -91,10 +93,6 @@ export function applyContractFilter(
     return contracts.filter((contract) => hasActiveWebhooks(contract))
   }
   return contracts
-}
-
-export function isApiConfigured(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_API_URL)
 }
 
 export function listContracts(): Promise<WatchedContract[]> {

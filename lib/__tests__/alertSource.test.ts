@@ -1,11 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/api', () => ({ apiFetch: vi.fn() }))
+vi.mock('@/lib/api', () => ({
+  apiFetch: vi.fn(),
+  isApiConfigured: () => Boolean(process.env.NEXT_PUBLIC_API_URL),
+}))
 vi.mock('@/lib/storage', () => ({ addAlert: vi.fn(), getAlerts: vi.fn() }))
 
-import { apiFetch } from '@/lib/api'
+import { apiFetch, isApiConfigured } from '@/lib/api'
 import { addAlert, getAlerts } from '@/lib/storage'
-import { fetchAlerts, filterNewAlerts, syncAlerts, startAlertPolling } from '@/lib/alertSource'
+import {
+  alertKey,
+  fetchAlerts,
+  filterNewAlerts,
+  isApiConfigured as alertSourceIsApiConfigured,
+  syncAlerts,
+  startAlertPolling,
+} from '@/lib/alertSource'
+import { isApiConfigured as contractsApiIsApiConfigured } from '@/lib/contractsApi'
 import type { AlertPayload } from '@/types'
 
 const mk = (hash: string, rule = 'AnyTransaction', timestamp = 1): AlertPayload => ({
@@ -19,6 +30,13 @@ const mk = (hash: string, rule = 'AnyTransaction', timestamp = 1): AlertPayload 
 })
 
 beforeEach(() => vi.clearAllMocks())
+
+describe('isApiConfigured', () => {
+  it('shares the single definition from @/lib/api across alertSource and contractsApi', () => {
+    expect(alertSourceIsApiConfigured).toBe(isApiConfigured)
+    expect(contractsApiIsApiConfigured).toBe(isApiConfigured)
+  })
+})
 
 describe('fetchAlerts', () => {
   it('builds the query and unwraps { alerts }', async () => {

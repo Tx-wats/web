@@ -6,8 +6,8 @@ import {
   replaceContracts,
   onContractsChange,
 } from '@/lib/storage'
+import { isApiConfigured } from '@/lib/api'
 import {
-  isApiConfigured,
   listContracts,
   createContract,
   updateContract,

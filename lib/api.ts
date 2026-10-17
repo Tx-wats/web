@@ -5,6 +5,10 @@ import type { AlertPayload, AlertRule, Network } from '@/types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? ''
 
+export function isApiConfigured(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_API_URL)
+}
+
 /** Default request timeout for apiFetch, in milliseconds. */
 export const API_TIMEOUT_MS = 15000
 

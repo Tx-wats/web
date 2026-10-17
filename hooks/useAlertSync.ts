@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { isApiConfigured, startAlertPolling } from '@/lib/alertSource'
+import { isApiConfigured } from '@/lib/api'
+import { startAlertPolling } from '@/lib/alertSource'
 import type { AlertPayload, Network } from '@/types'
 
 export interface AlertSyncState {
