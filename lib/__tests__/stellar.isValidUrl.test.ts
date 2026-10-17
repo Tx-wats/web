@@ -82,6 +82,25 @@ describe('validateWebhookUrl', () => {
     expect(validateWebhookUrl('http://169.254.1.1/webhook', 'testnet')).toBe('link_local_not_allowed')
   })
 
+  it('accepts legitimate hostnames starting with fc, fd, or fe80 (#263)', () => {
+    expect(validateWebhookUrl('https://fcbarcelona.com/hook', 'mainnet')).toBe(null)
+    expect(validateWebhookUrl('https://fd-alerts.example.com', 'mainnet')).toBe(null)
+    expect(validateWebhookUrl('https://fe80labs.io', 'mainnet')).toBe(null)
+  })
+
+  it('rejects bracketed IPv6 loopback, unique-local, and link-local literals (#263)', () => {
+    expect(validateWebhookUrl('https://[::1]/webhook', 'mainnet')).toBe('loopback_not_allowed')
+    expect(validateWebhookUrl('https://[fc00::1]/webhook', 'mainnet')).toBe('private_ip_not_allowed')
+    expect(validateWebhookUrl('https://[fd12:3456:789a::1]/webhook', 'mainnet')).toBe('private_ip_not_allowed')
+    expect(validateWebhookUrl('https://[fe80::1]/webhook', 'mainnet')).toBe('link_local_not_allowed')
+  })
+
+  it('prioritizes loopback and private IP errors over http protocol warnings (#263)', () => {
+    expect(validateWebhookUrl('http://localhost/webhook', 'testnet')).toBe('loopback_not_allowed')
+    expect(validateWebhookUrl('http://localhost/webhook', 'mainnet')).toBe('loopback_not_allowed')
+    expect(validateWebhookUrl('http://10.0.0.1/webhook', 'mainnet')).toBe('private_ip_not_allowed')
+  })
+
   it('rejects invalid URLs', () => {
     expect(validateWebhookUrl('not a url', 'mainnet')).toBe('invalid_url')
   })

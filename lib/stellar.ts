@@ -231,6 +231,58 @@ export function isValidUrl(url: string): boolean {
   }
 }
 
+export type HostIpClassification = 'loopback' | 'private_ip' | 'link_local' | null
+
+/**
+ * Classify a URL hostname into loopback, private IP, link-local, or null for public hosts.
+ * IPv6 checks apply only to bracketed IPv6 literals so hostnames starting with
+ * `fc`, `fd`, or `fe80` (e.g. `fcbarcelona.com`, `fe80labs.io`) are not misclassified.
+ */
+export function classifyHostIp(rawHostname: string): HostIpClassification {
+  const hostname = (rawHostname || '').trim().toLowerCase()
+  if (!hostname) return null
+
+  if (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '0.0.0.0' ||
+    /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)
+  ) {
+    return 'loopback'
+  }
+
+  if (hostname.startsWith('[') && hostname.endsWith(']')) {
+    const ipv6 = hostname.slice(1, -1)
+    if (
+      ipv6 === '::1' ||
+      ipv6 === '::' ||
+      ipv6 === '0:0:0:0:0:0:0:1' ||
+      ipv6 === '0:0:0:0:0:0:0:0' ||
+      /^::ffff:127\./i.test(ipv6) ||
+      /^::ffff:7f[0-9a-f]{2}:/i.test(ipv6)
+    ) {
+      return 'loopback'
+    }
+    if (/^fe[89ab][0-9a-f]*:/i.test(ipv6)) {
+      return 'link_local'
+    }
+    if (/^f[cd][0-9a-f]{0,2}:/i.test(ipv6)) {
+      return 'private_ip'
+    }
+    return null
+  }
+
+  if (/^(10|172\.(1[6-9]|2[0-9]|3[01])|192\.168)\./.test(hostname)) {
+    return 'private_ip'
+  }
+
+  if (/^169\.254\./.test(hostname)) {
+    return 'link_local'
+  }
+
+  return null
+}
+
 /** #117: Validate webhook URLs with security checks. Returns error/warning code or null if valid. */
 export function validateWebhookUrl(url: string, network: Network): string | null {
   if (!isValidUrl(url)) return 'invalid_url'
@@ -241,24 +293,15 @@ export function validateWebhookUrl(url: string, network: Network): string | null
     // Reject URLs with embedded credentials
     if (u.username || u.password) return 'credentials_in_url'
 
+    // Reject loopback, private IP, and link-local ranges before protocol warnings
+    // so the most severe error always wins (#263).
+    const hostClass = classifyHostIp(u.hostname || '')
+    if (hostClass === 'loopback') return 'loopback_not_allowed'
+    if (hostClass === 'private_ip') return 'private_ip_not_allowed'
+    if (hostClass === 'link_local') return 'link_local_not_allowed'
+
     // Warn on plain http (block for mainnet)
     if (u.protocol === 'http:') return network === 'mainnet' ? 'http_on_mainnet' : 'http_warning'
-
-    // Reject localhost and private IP ranges
-    const hostname = u.hostname || ''
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') {
-      return 'loopback_not_allowed'
-    }
-
-    // Reject private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fe80::/10)
-    if (/^(10|172\.(1[6-9]|2[0-9]|3[01])|192\.168)\./.test(hostname) ||
-        hostname.startsWith('fc') || hostname.startsWith('fd') ||
-        hostname.startsWith('fe80')) {
-      return 'private_ip_not_allowed'
-    }
-
-    // Reject link-local addresses (169.254.0.0/16, fe80::/10)
-    if (/^169\.254\./.test(hostname)) return 'link_local_not_allowed'
 
     return null
   } catch {
