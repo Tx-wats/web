@@ -132,8 +132,12 @@ HORIZON_URLS.testnet // https://horizon-testnet.stellar.org
 HORIZON_URLS.futurenet // https://horizon-futurenet.stellar.org
 
 // Soroban JSON-RPC - contract simulation, ledger entries
+SOROBAN_RPC_URLS.mainnet // https://mainnet.sorobanrpc.com
 SOROBAN_RPC_URLS.testnet // https://soroban-testnet.stellar.org
+SOROBAN_RPC_URLS.futurenet // https://rpc-futurenet.stellar.org
 ```
+
+Out of the box, Mainnet Soroban RPC defaults to the keyless public endpoint `https://mainnet.sorobanrpc.com` (replacing the keyed Validation Cloud URL that requires `/v1/<API_KEY>/...`). For production workloads or higher rate limits, set `NEXT_PUBLIC_SOROBAN_RPC_URL_MAINNET` (or `NEXT_PUBLIC_SOROBAN_RPC_URL`) to a dedicated Soroban RPC provider (for example Validation Cloud, Blockdaemon, QuickNode, Alchemy, or a self-hosted `stellar-rpc` node); see [Stellar RPC Providers](https://developers.stellar.org/docs/data/rpc/rpc-providers).
 
 ### Querying Horizon
 

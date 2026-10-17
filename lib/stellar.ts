@@ -9,7 +9,7 @@ export const HORIZON_URLS: Record<Network, string> = {
 }
 
 export const SOROBAN_RPC_URLS: Record<Network, string> = {
-  mainnet: 'https://mainnet.stellar.validationcloud.io/v1/soroban/rpc',
+  mainnet: 'https://mainnet.sorobanrpc.com',
   testnet: 'https://soroban-testnet.stellar.org',
   futurenet: 'https://rpc-futurenet.stellar.org',
 }
@@ -44,6 +44,23 @@ export function sorobanRpcUrl(network: Network): string {
   return (
     clean(perNetwork) ?? clean(process.env.NEXT_PUBLIC_SOROBAN_RPC_URL) ?? SOROBAN_RPC_URLS[network]
   )
+}
+
+/** Whether an explicit Mainnet Soroban RPC URL has been configured via env vars (#269). */
+export function isMainnetSorobanRpcConfigured(): boolean {
+  return Boolean(
+    clean(process.env.NEXT_PUBLIC_SOROBAN_RPC_URL_MAINNET) ??
+      clean(process.env.NEXT_PUBLIC_SOROBAN_RPC_URL)
+  )
+}
+
+/**
+ * Returns a configuration warning when Mainnet Soroban RPC falls back to the
+ * shared public endpoint instead of a dedicated `NEXT_PUBLIC_SOROBAN_RPC_URL_MAINNET` (#269).
+ */
+export function getMainnetSorobanRpcWarning(): string | null {
+  if (isMainnetSorobanRpcConfigured()) return null
+  return 'NEXT_PUBLIC_SOROBAN_RPC_URL_MAINNET is not set; using public Mainnet Soroban RPC fallback (https://mainnet.sorobanrpc.com).'
 }
 
 export const STELLAR_EXPERT_BASE = 'https://stellar.expert/explorer'

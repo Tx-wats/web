@@ -4,7 +4,10 @@ const nextConfig = {
     // #118: Build CSP with support for Freighter and configured API/RPC hosts
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.example.com'
     const horizonUrl = process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon.stellar.org'
-    const sorobanUrl = process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://mainnet.stellar.validationcloud.io'
+    const sorobanUrl =
+      process.env.NEXT_PUBLIC_SOROBAN_RPC_URL_MAINNET ||
+      process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ||
+      'https://mainnet.sorobanrpc.com'
 
     // Extract domain from URLs for CSP
     const apiDomain = new URL(apiUrl).hostname
