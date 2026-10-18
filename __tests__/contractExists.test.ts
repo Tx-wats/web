@@ -1,10 +1,10 @@
 import { vi } from 'vitest'
+import { Address, xdr } from '@stellar/stellar-sdk'
 import {
   contractExists,
   getLedgerEntriesRequest,
-  CONTRACT_INSTANCE_KEY,
 } from '@/lib/contractExists'
-import { sorobanRpcUrl } from '@/lib/stellar'
+import { buildContractInstanceLedgerKey, sorobanRpcUrl } from '@/lib/stellar'
 
 global.fetch = vi.fn()
 
@@ -21,14 +21,24 @@ function mockRpc(body: unknown, init: { ok?: boolean; status?: number } = {}) {
 }
 
 describe('getLedgerEntriesRequest', () => {
-  it('asks for the contract instance ledger key', () => {
+  it('asks for a base64-encoded contract instance LedgerKey XDR that decodes back to the contract', () => {
     const parsed = JSON.parse(getLedgerEntriesRequest(CONTRACT_ID))
     expect(parsed).toEqual({
       jsonrpc: '2.0',
       id: 1,
       method: 'getLedgerEntries',
-      params: { keys: [{ contractInstance: { contractId: CONTRACT_ID, key: CONTRACT_INSTANCE_KEY } }] },
+      params: { keys: [buildContractInstanceLedgerKey(CONTRACT_ID)] },
     })
+
+    const encodedKey = parsed.params.keys[0]
+    expect(typeof encodedKey).toBe('string')
+
+    const decoded = xdr.LedgerKey.fromXDR(encodedKey, 'base64')
+    expect(decoded.switch().name).toBe('contractData')
+    const contractData = decoded.contractData()
+    expect(Address.fromScAddress(contractData.contract()).toString()).toBe(CONTRACT_ID)
+    expect(contractData.key().switch().name).toBe('scvLedgerKeyContractInstance')
+    expect(contractData.durability().name).toBe('persistent')
   })
 })
 
@@ -45,7 +55,9 @@ describe('contractExists', () => {
     const [url, init] = fetchMock().mock.calls[0]
     expect(url).toBe(sorobanRpcUrl('testnet'))
     expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
-    expect(JSON.parse(init.body).params.keys[0].contractInstance.contractId).toBe(CONTRACT_ID)
+    const keyXdr = JSON.parse(init.body).params.keys[0]
+    const decoded = xdr.LedgerKey.fromXDR(keyXdr, 'base64')
+    expect(Address.fromScAddress(decoded.contractData().contract()).toString()).toBe(CONTRACT_ID)
   })
 
   it('reports not_found when the RPC returns no entries', async () => {
@@ -128,3 +140,14 @@ describe('contractExists', () => {
     await expect(pending).resolves.toEqual({ status: 'unavailable', reason: 'Request cancelled' })
   })
 })
+
+describe.runIf(process.env.SMOKE_TESTNET === '1')('contractExists testnet smoke', () => {
+  const realFetch = globalThis.fetch
+
+  it('queries Soroban testnet RPC without LedgerKey XDR errors', async () => {
+    global.fetch = realFetch
+    const result = await contractExists('testnet', CONTRACT_ID, { timeoutMs: 8000 })
+    expect(['found', 'not_found']).toContain(result.status)
+  })
+})
+

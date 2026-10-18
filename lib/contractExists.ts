@@ -1,4 +1,4 @@
-import { isValidContractId, sorobanRpcUrl } from '@/lib/stellar'
+import { buildContractInstanceLedgerKey, isValidContractId, sorobanRpcUrl } from '@/lib/stellar'
 import type { Network } from '@/types'
 
 /**
@@ -6,7 +6,7 @@ import type { Network } from '@/types'
  * instance key, base64-encoded. A contract that exists on the target network
  * has an entry under this key.
  */
-export const CONTRACT_INSTANCE_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+export const CONTRACT_INSTANCE_KEY = buildContractInstanceLedgerKey(`C${'A'.repeat(55)}`)
 
 /** Default Soroban RPC timeout, in milliseconds. */
 export const CONTRACT_LOOKUP_TIMEOUT_MS = 8000
@@ -32,7 +32,7 @@ export function getLedgerEntriesRequest(contractId: string, id = 1): string {
     id,
     method: 'getLedgerEntries',
     params: {
-      keys: [{ contractInstance: { contractId, key: CONTRACT_INSTANCE_KEY } }],
+      keys: [buildContractInstanceLedgerKey(contractId)],
     },
   })
 }
