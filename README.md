@@ -43,6 +43,7 @@ Open [http://localhost:3000](http://localhost:3000).
   - Install from [freighter.app](https://www.freighter.app/)
   - Supported on Chrome, Firefox, and Edge
   - Must be connected to the same network (Mainnet, Testnet, or Futurenet) as the contract you're registering
+  - For connection troubleshooting and network setup, see the [Troubleshooting Guide](docs/troubleshooting.md).
 
 ## Project structure
 
@@ -143,13 +144,13 @@ Use `horizonUrl(network)` and `sorobanRpcUrl(network)` rather than the constants
 
 SDF runs public RPC for testnet and futurenet only. For mainnet the dashboard defaults to [Gateway.fm](https://gateway.fm)'s keyless public endpoint, so contract lookups work out of the box. Public endpoints are rate-limited and best-effort, so for production set your own:
 
-| Provider | Mainnet endpoint | Key needed |
-| --- | --- | --- |
-| Gateway.fm (default) | `https://soroban-rpc.mainnet.stellar.gateway.fm` | No |
-| Lightsail | `https://rpc.lightsail.network` | No |
-| Ankr | `https://rpc.ankr.com/stellar_soroban` | No (public tier); yes for higher limits |
-| Validation Cloud | `https://mainnet.stellar.validationcloud.io/v1/<API_KEY>/soroban/rpc` | Yes |
-| QuickNode, Blockdaemon, … | provider-specific | Yes |
+| Provider                  | Mainnet endpoint                                                      | Key needed                              |
+| ------------------------- | --------------------------------------------------------------------- | --------------------------------------- |
+| Gateway.fm (default)      | `https://soroban-rpc.mainnet.stellar.gateway.fm`                      | No                                      |
+| Lightsail                 | `https://rpc.lightsail.network`                                       | No                                      |
+| Ankr                      | `https://rpc.ankr.com/stellar_soroban`                                | No (public tier); yes for higher limits |
+| Validation Cloud          | `https://mainnet.stellar.validationcloud.io/v1/<API_KEY>/soroban/rpc` | Yes                                     |
+| QuickNode, Blockdaemon, … | provider-specific                                                     | Yes                                     |
 
 Configure endpoints in `.env.local`. Per-network variables win over the global one, and the Content-Security-Policy `connect-src` allow-list picks up whatever you set:
 
@@ -464,6 +465,19 @@ The settings page lets users:
 - Export contracts only, or everything (contracts, alert history, and settings) as versioned JSON
 - Import a contracts-only (v1) or full (v2) backup, choosing whether to restore contracts only or everything
 - Configure alert retention days, notification preference, and view preferences
+
+## Troubleshooting
+
+Encountering issues with wallet connection, network mismatch, custom RPC endpoints, CSP rules, test webhooks, or local storage?
+
+Detailed symptom → cause → fix steps are documented in the **[Troubleshooting Guide](docs/troubleshooting.md)**:
+
+1. [Freighter Wallet Not Detected or Unavailable](docs/troubleshooting.md#1-freighter-wallet-not-detected-or-unavailable)
+2. [Wallet Connected to the Wrong Network](docs/troubleshooting.md#2-wallet-connected-to-the-wrong-network)
+3. [Mainnet RPC Requiring an API Key](docs/troubleshooting.md#3-mainnet-rpc-requiring-an-api-key)
+4. [Content Security Policy (CSP) Blocking a Custom RPC](docs/troubleshooting.md#4-content-security-policy-csp-blocking-a-custom-rpc)
+5. [Test Webhooks Blocked as Private Addresses](docs/troubleshooting.md#5-test-webhooks-blocked-as-private-addresses)
+6. [Storage Full / LocalStorage Quota Exceeded](docs/troubleshooting.md#6-storage-full--localstorage-quota-exceeded)
 
 ## Bug Reports & Feature Requests
 

@@ -1,41 +1,41 @@
-'use client';
+'use client'
 
-import './globals.css';
-import { useState } from 'react';
+import './globals.css'
+import { useState } from 'react'
 import {
   clearTxWatchStorage,
   downloadTxWatchBackup,
   getCorruptedStorageKey,
-} from '@/lib/storageLogger';
+} from '@/lib/storageLogger'
 
 export default function GlobalError({
   error,
   reset,
 }: {
-  error: Error & { digest?: string };
-  reset: () => void;
+  error: Error & { digest?: string }
+  reset: () => void
 }) {
-  const [confirmingReset, setConfirmingReset] = useState(false);
-  const [resetDone, setResetDone] = useState(false);
+  const [confirmingReset, setConfirmingReset] = useState(false)
+  const [resetDone, setResetDone] = useState(false)
 
   const handleDownloadBackup = () => {
     try {
-      downloadTxWatchBackup();
+      downloadTxWatchBackup()
     } catch {
       // Ignore backup failures; the user can still proceed with reset.
     }
-  };
+  }
 
   const handleReset = () => {
     try {
-      clearTxWatchStorage(getCorruptedStorageKey() ?? undefined);
+      clearTxWatchStorage(getCorruptedStorageKey() ?? undefined)
     } catch {
       // Ignore storage failures; still attempt to restart the app.
     }
-    setResetDone(true);
-    setConfirmingReset(false);
-    reset();
-  };
+    setResetDone(true)
+    setConfirmingReset(false)
+    reset()
+  }
 
   return (
     <html lang="en" className="dark">
@@ -109,10 +109,23 @@ export default function GlobalError({
                   Local data has been reset.
                 </p>
               )}
+
+              <p className="text-xs text-muted-foreground pt-2">
+                Need assistance? Refer to the{' '}
+                <a
+                  href="https://github.com/Tx-wats/web/blob/main/docs/troubleshooting.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline hover:text-primary/80"
+                >
+                  Troubleshooting Guide
+                </a>
+                .
+              </p>
             </div>
           </div>
         </div>
       </body>
     </html>
-  );
+  )
 }

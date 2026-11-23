@@ -1,66 +1,67 @@
-'use client';
+'use client'
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { exportAllStorageData, clearTxWatchStorage } from '@/lib/storage';
-import { getLastStorageError } from '@/lib/storageLogger';
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { exportAllStorageData, clearTxWatchStorage } from '@/lib/storage'
+import { getLastStorageError } from '@/lib/storageLogger'
 
 export default function Error({
   error,
   reset,
 }: {
-  error: Error & { digest?: string };
-  reset: () => void;
+  error: Error & { digest?: string }
+  reset: () => void
 }) {
   useEffect(() => {
-    console.error(error);
-  }, [error]);
+    console.error(error)
+  }, [error])
 
-  const isStorageError = error.message?.includes('storage') ||
+  const isStorageError =
+    error.message?.includes('storage') ||
     error.message?.includes('JSON') ||
-    error.message?.includes('parse');
+    error.message?.includes('parse')
 
-  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [confirmingReset, setConfirmingReset] = useState(false)
 
   const handleDownloadBackup = () => {
     try {
-      const data = exportAllStorageData();
+      const data = exportAllStorageData()
       const blob = new Blob([JSON.stringify(data, null, 2)], {
         type: 'application/json',
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `txwatch-backup-${new Date().toISOString()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `txwatch-backup-${new Date().toISOString()}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
     } catch (e) {
-      console.error('Failed to export storage data:', e);
+      console.error('Failed to export storage data:', e)
     }
-  };
+  }
 
   const handleConfirmReset = () => {
     try {
-      const lastError = getLastStorageError();
+      const lastError = getLastStorageError()
       if (lastError?.key) {
         try {
-          localStorage.removeItem(lastError.key);
+          localStorage.removeItem(lastError.key)
         } catch (e) {
-          console.error('Failed to remove corrupted key:', e);
-          clearTxWatchStorage();
+          console.error('Failed to remove corrupted key:', e)
+          clearTxWatchStorage()
         }
       } else {
-        clearTxWatchStorage();
+        clearTxWatchStorage()
       }
     } catch (e) {
-      console.error('Failed to clear storage:', e);
+      console.error('Failed to clear storage:', e)
     } finally {
-      setConfirmingReset(false);
-      reset();
+      setConfirmingReset(false)
+      reset()
     }
-  };
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
@@ -133,8 +134,21 @@ export default function Error({
           >
             Go Home
           </Link>
+
+          <p className="pt-2 text-xs text-muted-foreground">
+            Encountering repeated issues? Check the{' '}
+            <a
+              href="https://github.com/Tx-wats/web/blob/main/docs/troubleshooting.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline hover:text-primary/80"
+            >
+              Troubleshooting Guide
+            </a>
+            .
+          </p>
         </div>
       </div>
     </div>
-  );
+  )
 }
