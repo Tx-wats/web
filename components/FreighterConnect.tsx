@@ -16,7 +16,9 @@ import {
  * Maps a raw Freighter network id (e.g. `PUBLIC`, `TESTNET`) to the app's
  * `Network`. Returns `null` for ids we don't recognise (custom networks).
  */
-function toAppNetwork(freighterNetwork: string | null | undefined): Network | null {
+function toAppNetwork(
+  freighterNetwork: string | null | undefined
+): Network | null {
   if (!freighterNetwork) return null
   switch (freighterNetwork.toUpperCase()) {
     case 'PUBLIC':
@@ -125,7 +127,6 @@ export default function FreighterConnect({
       const session = await connectFreighter()
       publish(session.publicKey)
       setNetwork(session.network ?? null)
-      onConnect?.(session.publicKey)
     } catch (err) {
       if (err instanceof FreighterUnavailableError) {
         setMissingExtension(true)
@@ -240,7 +241,10 @@ export default function FreighterConnect({
         Connect Freighter
       </button>
       {missingExtension ? (
-        <div className="mt-2 flex flex-col gap-1.5 text-xs text-zinc-400" role="alert">
+        <div
+          className="mt-2 flex flex-col gap-1.5 text-xs text-zinc-400"
+          role="alert"
+        >
           <p>
             Freighter not installed —{' '}
             <a

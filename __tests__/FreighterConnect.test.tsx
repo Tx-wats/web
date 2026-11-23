@@ -14,6 +14,10 @@ vi.mock('@stellar/freighter-api', () => ({
   getNetworkDetails: vi.fn(),
   requestAccess: vi.fn(),
   signTransaction: vi.fn(),
+  WatchWalletChanges: vi.fn().mockImplementation(() => ({
+    watch: vi.fn(),
+    stop: vi.fn(),
+  })),
 }))
 
 const mockIsConnected = vi.mocked(isConnected)
@@ -190,7 +194,9 @@ describe('FreighterConnect', () => {
       )
 
       await waitFor(() => {
-        expect(screen.getByText(/Freighter not installed/)).toBeInTheDocument()
+        expect(
+          screen.getAllByText(/Freighter not installed/)[0]
+        ).toBeInTheDocument()
         expect(
           screen.getByRole('link', { name: /Install Freighter/i })
         ).toHaveAttribute('href', 'https://www.freighter.app/')
@@ -253,7 +259,7 @@ describe('FreighterConnect', () => {
   })
 
   describe('callbacks', () => {
-    it('calls onConnect callback when connection succeeds', async () => {
+    it('calls onConnect callback exactly once when connection succeeds', async () => {
       const onConnect = vi.fn()
       mockDisconnectedSession()
 
@@ -264,19 +270,54 @@ describe('FreighterConnect', () => {
       )
 
       await waitFor(() => {
-        expect(onConnect).toHaveBeenCalledWith(MOCK_PUBLIC_KEY)
+        expect(screen.getByText('Disconnect')).toBeInTheDocument()
       })
+
+      expect(onConnect).toHaveBeenCalledTimes(1)
+      expect(onConnect).toHaveBeenCalledWith(MOCK_PUBLIC_KEY)
     })
 
-    it('calls onConnect callback on initial mount if already connected', async () => {
+    it('calls onConnect callback exactly once on initial mount if already connected', async () => {
       const onConnect = vi.fn()
       mockConnectedSession()
 
       render(<FreighterConnect onConnect={onConnect} />)
 
       await waitFor(() => {
-        expect(onConnect).toHaveBeenCalledWith(MOCK_PUBLIC_KEY)
+        expect(screen.getByText('Disconnect')).toBeInTheDocument()
       })
+
+      expect(onConnect).toHaveBeenCalledTimes(1)
+      expect(onConnect).toHaveBeenCalledWith(MOCK_PUBLIC_KEY)
+    })
+
+    it('does not call onConnect when disconnected or after disconnecting', async () => {
+      const onConnect = vi.fn()
+      mockDisconnectedSession()
+
+      render(<FreighterConnect onConnect={onConnect} />)
+
+      expect(
+        await screen.findByRole('button', { name: /Connect Freighter/ })
+      ).toBeInTheDocument()
+      expect(onConnect).not.toHaveBeenCalled()
+    })
+
+    it('does not call onConnect when connection fails', async () => {
+      const onConnect = vi.fn()
+      mockDisconnectedSession()
+      mockRequestAccess.mockRejectedValue(new Error('User rejected'))
+
+      render(<FreighterConnect onConnect={onConnect} />)
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Connect Freighter/ })
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('User rejected')).toBeInTheDocument()
+      })
+      expect(onConnect).not.toHaveBeenCalled()
     })
   })
 
@@ -296,7 +337,10 @@ describe('FreighterConnect', () => {
       })
       expect(onConnect).toHaveBeenCalledWith(MOCK_PUBLIC_KEY)
       expect(localStorage.getItem(WALLET_STORAGE_KEY)).toBeNull()
-      expect((window as any).__freighterPublicKey).toBeUndefined()
+      expect(
+        (window as Window & { __freighterPublicKey?: string })
+          .__freighterPublicKey
+      ).toBeUndefined()
     })
 
     it('does not leave a stale key behind after disconnecting', async () => {
