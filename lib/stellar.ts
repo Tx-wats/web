@@ -79,11 +79,6 @@ export interface NormalizedContractIdResult {
 
 /** Looks like a URL or a bare host/path, e.g. "stellarchain.io/contracts/C…". */
 const URL_LIKE = /^(?:https?:\/\/|www\.|[a-z0-9-]+(?:\.[a-z0-9-]+)+\/|\/)/i
-/**
- * A StrKey once whitespace/line breaks are removed: a version letter plus 55
- * base32 characters (68 for a muxed M… address).
- */
-const STRKEY_LIKE = /^[A-Z][A-Z2-7]{55}(?:[A-Z2-7]{13})?$/i
 /** Candidate contract IDs inside a URL. */
 const CONTRACT_CANDIDATE = /C[A-Z2-7]{55}(?![A-Z2-7])/gi
 
@@ -137,7 +132,7 @@ export function normalizeContractId(input: string): NormalizedContractIdResult {
   }
 
   const compact = trimmed.replace(/\s+/g, '')
-  if (STRKEY_LIKE.test(compact)) {
+  if (isValidContractId(compact)) {
     return { contractId: compact.toUpperCase() }
   }
 
