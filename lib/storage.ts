@@ -297,16 +297,23 @@ export function addContract(contract: WatchedContract) {
 
 export function replaceContracts(list: WatchedContract[]): boolean {
   const normalized = list.map((c) => ({ ...c, enabled: c.enabled ?? true }))
+
+  // Reject duplicates within the incoming list (e.g. import/restore with
+  // the same contract_id+network appearing more than once).
+  const seen = new Set<string>()
+  for (const c of normalized) {
+    const key = `${c.contract_id}::${c.network}`
+    if (seen.has(key)) {
+      throw new DuplicateContractError(c.contract_id, c.network)
+    }
+    seen.add(key)
+  }
+
   return save(CONTRACTS_KEY, normalized)
 }
 
 export function saveContract(contract: WatchedContract): boolean {
   const contracts = getContracts()
-  const updated = {
-    ...contract,
-    enabled: contract.enabled ?? true,
-    updated_at: Date.now(),
-  }
 
   const duplicate = contracts.find(
     (c) => c.contract_id === contract.contract_id && c.network === contract.network && c.id !== contract.id
