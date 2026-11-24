@@ -55,7 +55,12 @@ function parseFunctionNames(raw: string): string[] {
     .filter(Boolean)
 }
 
-/** Key identifying a rule's configuration, ignoring the enabled flag. */
+/** Key identifying a rule's configuration, ignoring the enabled flag.
+ *
+ * Soroban function names are case-sensitive symbols, so "transfer" and
+ * "Transfer" are distinct rules. No case normalization is applied here —
+ * the caller is responsible for using the exact casing from the contract.
+ */
 function ruleKey(rule: AlertRule): string {
   switch (rule.type) {
     case 'LargeTransfer':
