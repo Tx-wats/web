@@ -76,6 +76,16 @@ const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024
 const MAX_ALERTS_PER_CONTRACT = 500
 const DEFAULT_RETENTION_DAYS = 90
 
+export function getMaxAlertsPerContract(): number {
+  return getAlertCap()
+}
+
+export function setMaxAlertsPerContract(cap: number): void {
+  const storage = getStorage()
+  if (!storage || !Number.isFinite(cap) || cap < 1) return
+  storage.setItem(ALERT_CAP_KEY, String(Math.floor(cap)))
+}
+
 export function getRetentionDays(): number {
   const raw = Number(getStorage()?.getItem(RETENTION_KEY))
   return Number.isFinite(raw) && raw >= 1
@@ -449,8 +459,28 @@ export function addAlert(
     contract_id:
       alert.contract_id ?? (alert as { contractId?: string }).contractId,
   }
-  const all = [...load<AlertPayload>(ALERTS_KEY), normalizedAlert]
-  save(ALERTS_KEY, capAlertsPerContract(all))
+  const key = `${normalizedAlert.contract_id}::${normalizedAlert.network ?? ''}`
+  const cap = getMaxAlertsPerContract()
+
+  const existing = load<AlertPayload>(ALERTS_KEY)
+  const sameContract = existing.filter(
+    (a) => `${a.contract_id}::${a.network ?? ''}` === key
+  )
+
+  // Only trim the overflowing contract group instead of rebuilding counts
+  // over every alert on each call.
+  if (sameContract.length >= cap) {
+    const others = existing.filter(
+      (a) => `${a.contract_id}::${a.network ?? ''}` !== key
+    )
+    const newest = sameContract
+      .slice()
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, cap - 1)
+    save(ALERTS_KEY, [...others, ...newest, normalizedAlert])
+  } else {
+    save(ALERTS_KEY, [...existing, normalizedAlert])
+  }
   return normalizedAlert
 }
 
