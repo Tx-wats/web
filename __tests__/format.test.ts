@@ -99,3 +99,13 @@ describe('maskWebhookUrl', () => {
     expect(maskWebhookUrl('not-a-url-secret-string')).toBe('not-a-ur…****')
   })
 })
+describe('formatRuleSummary thresholds', () => {
+  it.each([
+    [0.0000001, '> 0.0000001 XLM'],
+    [0.0001, '> 0.0001 XLM'],
+    [1000000, '> 1,000,000 XLM'],
+  ])('formats %s without rounding', async (threshold_xlm, expected) => {
+    const { formatRuleSummary } = await import('../lib/format')
+    expect(formatRuleSummary({ type: 'LargeTransfer', threshold_xlm })).toBe(expected)
+  })
+})

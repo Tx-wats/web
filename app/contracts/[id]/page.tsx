@@ -30,7 +30,7 @@ import {
   networkMismatchWarning,
   readFreighterConnection,
 } from '@/lib/freighter'
-import { formatDate, formatRelativeTime, formatRuleSummary } from '@/lib/format'
+import { formatDate, formatRelativeTime, formatRuleAccessibleName, formatRuleSummary } from '@/lib/format'
 import { useAnalytics } from '@/lib/useAnalytics'
 import { useNow } from '@/hooks/useNow'
 import { useToast } from '@/components/ToastProvider'
@@ -867,6 +867,7 @@ export default function ContractDetailPage({
                   type="button"
                   role="switch"
                   aria-checked={isRuleEnabled(rule)}
+                  aria-label={`${isRuleEnabled(rule) ? 'Disable' : 'Enable'} ${formatRuleAccessibleName(rule)}`}
                   aria-label={
                     isRuleEnabled(rule) ? 'Disable rule' : 'Enable rule'
                   }

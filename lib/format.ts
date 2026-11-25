@@ -1,3 +1,5 @@
+import { AlertRule } from '@/types'
+import { getRuleMeta } from '@/lib/ruleMeta'
 import { AlertRule, largeTransferAssetLabel } from '@/types'
 
 /**
@@ -111,9 +113,15 @@ export function formatRelativeTime(
  * The LargeTransfer operator matches tx-watch-core, which fires when a
  * transfer strictly exceeds the threshold (amount > threshold_xlm).
  */
+/** Formats an XLM threshold with grouping, keeping up to 7 decimals (stroop precision). */
+export function formatThresholdXlm(value: number): string {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 7 })
+}
+
 export function formatRuleSummary(rule: AlertRule): string {
   switch (rule.type) {
     case 'LargeTransfer':
+      return `> ${formatThresholdXlm(rule.threshold_xlm)} XLM`
       return `> ${rule.threshold_xlm.toLocaleString()} ${largeTransferAssetLabel(rule)}`
     case 'FunctionCalled':
       return rule.function_name || 'function'
@@ -125,6 +133,9 @@ export function formatRuleSummary(rule: AlertRule): string {
   }
 }
 
+/** Rule label plus summary (e.g. "Large Transfer > 10,000 XLM") for unique accessible names. */
+export function formatRuleAccessibleName(rule: AlertRule): string {
+  return `${getRuleMeta(rule.type).label} ${formatRuleSummary(rule)}`.trim()
 /**
  * Formats an XLM amount for display (e.g. "1,234.5 XLM").
  *

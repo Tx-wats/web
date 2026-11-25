@@ -100,4 +100,18 @@ describe('RuleBuilder accessibility', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
   })
+
+  it('only references the threshold hint id when the hint is rendered', () => {
+    render(<RuleBuilder rules={[]} onChange={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText(/rule type/i), {
+      target: { value: 'LargeTransfer' },
+    })
+    const threshold = screen.getByLabelText(/threshold \(xlm\)/i)
+    const ids = () =>
+      (threshold.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean)
+    expect(ids().every((id) => document.getElementById(id))).toBe(true)
+    fireEvent.change(threshold, { target: { value: '5' } })
+    expect(ids().length).toBe(1)
+    expect(ids().every((id) => document.getElementById(id))).toBe(true)
+  })
 })

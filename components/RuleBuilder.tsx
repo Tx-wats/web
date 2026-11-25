@@ -2,6 +2,7 @@
 
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react'
 import { AlertRule, AlertRuleType, isRuleEnabled } from '@/types'
+import { formatRuleAccessibleName, formatRuleSummary } from '@/lib/format'
 import { isValidContractId } from '@/lib/stellar'
 import { formatRuleSummary } from '@/lib/format'
 import { MAX_XLM_DECIMALS, validateThreshold } from '@/lib/formatAmount'
@@ -123,6 +124,8 @@ export default function RuleBuilder({
   const thresholdHintId = `${idPrefix}-threshold-hint`
   const errorId = `${idPrefix}-error`
   const warningId = `${idPrefix}-warning`
+  const hasThresholdHint = !isNaN(parseFloat(thresholdText))
+  const thresholdDescribedBy = [error ? errorId : null, hasThresholdHint ? thresholdHintId : null].filter(Boolean).join(' ')
   const thresholdDescribedBy = [error ? errorId : null, thresholdHintId]
     .filter(Boolean)
     .join(' ')
@@ -436,6 +439,7 @@ export default function RuleBuilder({
               </option>
             ))}
           </select>
+          <p id={typeHintId} className="text-xs text-zinc-500 mt-1">{getRuleMeta(draftType).description}</p>
           <p id={typeHintId} className="text-xs text-zinc-500 mt-1">
             {getRuleMeta(draftType).description}
           </p>
@@ -468,7 +472,7 @@ export default function RuleBuilder({
               }}
               className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
             />
-            {!isNaN(thresholdPreview) && (
+            {hasThresholdHint && (
               <p id={thresholdHintId} className="text-xs text-zinc-500 mt-1">
                 Threshold: {formatXlm(thresholdPreview)}{' '}
                 {assetText.trim() || 'XLM'}
@@ -658,7 +662,7 @@ export default function RuleBuilder({
                     type="button"
                     role="switch"
                     aria-checked={enabled}
-                    aria-label={enabled ? 'Disable rule' : 'Enable rule'}
+                    aria-label={`${enabled ? 'Disable' : 'Enable'} ${formatRuleAccessibleName(rule)}`}
                     onClick={() => toggleRule(index)}
                     className="text-xs text-zinc-400 hover:text-zinc-100 transition-colors"
                   >
@@ -666,6 +670,7 @@ export default function RuleBuilder({
                   </button>
                   <button
                     type="button"
+                    aria-label={`Edit ${formatRuleAccessibleName(rule)}`}
                     onClick={() => startEdit(index)}
                     className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
                   >
@@ -673,6 +678,7 @@ export default function RuleBuilder({
                   </button>
                   <button
                     type="button"
+                    aria-label={`Remove ${formatRuleAccessibleName(rule)}`}
                     onClick={() => removeRule(index)}
                     className="text-xs text-red-400 hover:text-red-300 transition-colors"
                   >

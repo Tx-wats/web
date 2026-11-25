@@ -2,6 +2,7 @@ import { validateContractEntry } from "./validation";
 import type { WatchedContract } from "./types";
 import { horizonUrl, isValidContractId } from '@/lib/stellar'
 import { SIGNATURE_HEADER, signWebhookPayload } from './webhookSignature'
+import { formatThresholdXlm } from './format'
 import { selectTestDeliveryHeaders } from './webhookHeaders'
 import { formatWebhookBody } from './webhookFormat'
 import { sanitizeBodySnippet } from './bodySnippet'
@@ -217,6 +218,7 @@ export const TEST_CONTRACT_ID =
 export function describeRule(rule: AlertRule): string {
   switch (rule.type) {
     case 'LargeTransfer':
+      return `${rule.type} (over ${formatThresholdXlm(rule.threshold_xlm)} XLM)`
       return `${rule.type} (over ${rule.threshold_xlm} ${largeTransferAssetLabel(rule)})`
     case 'FunctionCalled':
       return `${rule.type} (${rule.function_name.trim()})`
