@@ -94,4 +94,14 @@ describe('Content-Security-Policy connect-src', () => {
     expect(policy).toContain("form-action 'self'")
     expect(policy).toContain("frame-ancestors 'none'")
   })
+
+  it('omits API origin when NEXT_PUBLIC_API_URL is unset or blank', async () => {
+    vi.stubEnv('NEXT_PUBLIC_API_URL', '')
+    const headers = await nextConfig.headers()
+    const policy = headers?.[0].headers.find(
+      (header) => header.key === 'Content-Security-Policy'
+    )?.value
+    expect(policy).not.toContain('api.example.com')
+    expect(policy).not.toContain('example.com')
+  })
 })

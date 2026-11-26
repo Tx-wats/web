@@ -56,4 +56,25 @@ describe('middleware Content-Security-Policy', () => {
     expect(directive('form-action').trim()).toBe("form-action 'self'")
     expect(directive('frame-ancestors').trim()).toBe("frame-ancestors 'none'")
   })
+
+  it('omits API origin when NEXT_PUBLIC_API_URL is unset or blank', () => {
+    vi.stubEnv('NEXT_PUBLIC_API_URL', '')
+    const directiveVal = connectSrc()
+    expect(directiveVal).not.toContain('api.example.com')
+    expect(directiveVal).not.toContain('example.com')
+
+    const defaultDirective = directive('default-src')
+    expect(defaultDirective).not.toContain('api.example.com')
+    expect(defaultDirective).not.toContain('example.com')
+
+    const scriptDirective = directive('script-src')
+    expect(scriptDirective).not.toContain('api.example.com')
+    expect(scriptDirective).not.toContain('example.com')
+  })
+
+  it('includes configured API origin when NEXT_PUBLIC_API_URL is set', () => {
+    vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.custombackend.com/v1')
+    const directiveVal = connectSrc()
+    expect(directiveVal).toContain('https://api.custombackend.com')
+  })
 })

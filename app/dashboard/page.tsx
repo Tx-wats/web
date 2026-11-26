@@ -35,10 +35,6 @@ export default function DashboardPage() {
     const startOfToday = new Date()
     startOfToday.setHours(0, 0, 0, 0)
     setAlertsToday(realAlerts.filter((a) => a.timestamp >= startOfToday.getTime()).length)
-    setNow(Date.now())
-    setAlertsToday(
-      collected.filter((a) => a.timestamp >= startOfToday.getTime()).length
-    )
     setMounted(true)
   }, [contracts])
 
