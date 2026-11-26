@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { networkOrigins } from './lib/networkUrls.mjs'
+import { networkOrigins, apiOrigin } from './lib/networkUrls.mjs'
 
 export function middleware(request: NextRequest) {
   const nonceBytes = crypto.getRandomValues(new Uint8Array(16))
   const nonce = btoa(String.fromCharCode(...nonceBytes))
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.example.com'
   // Every network's Horizon and Soroban RPC origin (with overrides), the
   // same allow-list as next.config.mjs, so testnet/futurenet lookups and
   // per-network endpoints are not blocked.
-  const cspAllowList = ["'self'", new URL(apiUrl).origin, ...networkOrigins()]
+  const cspAllowList = ["'self'", ...apiOrigin(), ...networkOrigins()]
     .filter((source, index, sources) => sources.indexOf(source) === index)
     .join(' ')
   const csp = [

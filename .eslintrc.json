@@ -12,6 +12,7 @@
         "varsIgnorePattern": "^_",
         "caughtErrorsIgnorePattern": "^_"
       }
-    ]
+    ],
+    "react-hooks/rules-of-hooks": "error"
   }
 }
